@@ -46,3 +46,12 @@ module "backend" {
   public_subnet_ids = module.network.public_subnet_ids
   instance_type     = "t3.micro"
 }
+
+module "database" {
+  source = "../../modules/database"
+
+  env                = var.env
+  vpc_id             = module.network.vpc_id
+  private_subnet_ids = module.network.private_subnet_ids
+  ec2_sg_id          = module.backend.ec2_sg_id
+}
