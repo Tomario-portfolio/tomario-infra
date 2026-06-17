@@ -1,0 +1,54 @@
+name: Cost Stop
+
+on:
+  workflow_dispatch:
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  AWS_REGION: ap-northeast-1
+  TF_WORKING_DIR: envs/dev
+  ASG_NAME: tomario-dev-asg
+  RDS_INSTANCE: tomario-dev-rds
+
+jobs:
+  cost-stop:
+    name: Stop Resources
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: ${{ env.TF_WORKING_DIR }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+
+      - name: Terraform Init
+        run: terraform init
+
+      - name: Delete ALB (terraform destroy -target=module.backend)
+        run: terraform destroy -target=module.backend -auto-approve
+
+      - name: Stop EC2 (ASG min/desired = 0)
+        run: |
+          aws autoscaling update-auto-scaling-group \
+            --auto-scaling-group-name ${{ env.ASG_NAME }} \
+            --min-size 0 \
+            --desired-capacity 0
+
+      - name: Stop RDS
+        run: |
+          aws rds stop-db-instance \
+            --db-instance-identifier ${{ env.RDS_INSTANCE }}
