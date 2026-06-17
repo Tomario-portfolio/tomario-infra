@@ -37,3 +37,12 @@ module "network" {
   public_subnet_cidrs  = ["10.0.0.0/24", "10.0.1.0/24"]
   private_subnet_cidrs = ["10.0.10.0/24", "10.0.11.0/24"]
 }
+
+module "backend" {
+  source = "../../modules/backend"
+
+  env               = var.env
+  vpc_id            = module.network.vpc_id
+  public_subnet_ids = module.network.public_subnet_ids
+  instance_type     = "t3.micro"
+}
