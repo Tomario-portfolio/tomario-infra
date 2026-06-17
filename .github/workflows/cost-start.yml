@@ -10,7 +10,6 @@ permissions:
 env:
   AWS_REGION: ap-northeast-1
   TF_WORKING_DIR: envs/dev
-  ASG_NAME: tomario-dev-asg
   RDS_INSTANCE: tomario-dev-rds
 
 jobs:
@@ -45,15 +44,8 @@ jobs:
           aws rds wait db-instance-available \
             --db-instance-identifier ${{ env.RDS_INSTANCE }}
 
-      - name: Start EC2 (ASG min/desired = 1)
-        run: |
-          aws autoscaling update-auto-scaling-group \
-            --auto-scaling-group-name ${{ env.ASG_NAME }} \
-            --min-size 1 \
-            --desired-capacity 1
-
       - name: Terraform Init
         run: terraform init
 
-      - name: Create ALB (terraform apply -target=module.backend)
+      - name: Create backend (terraform apply -target=module.backend)
         run: terraform apply -target=module.backend -auto-approve
