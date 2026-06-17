@@ -9,7 +9,7 @@ terraform {
   }
 
   backend "s3" {
-    bucket  = "tomario-tfstate-418295697340"
+    bucket  = "tomario-tfstate-shared-bucket"
     key     = "dev/terraform.tfstate"
     region  = "ap-northeast-1"
     encrypt = true
