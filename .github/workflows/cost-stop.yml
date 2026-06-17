@@ -37,8 +37,15 @@ jobs:
       - name: Terraform Init
         run: terraform init
 
-      - name: Delete backend (terraform destroy -target=module.backend)
-        run: terraform destroy -target=module.backend -auto-approve
+      - name: Delete ALB and ASG (SG/IAMは残す)
+        run: |
+          terraform destroy \
+            -target=module.backend.aws_autoscaling_group.this \
+            -target=module.backend.aws_launch_template.this \
+            -target=module.backend.aws_lb_listener.http \
+            -target=module.backend.aws_lb_target_group.this \
+            -target=module.backend.aws_lb.this \
+            -auto-approve
 
       - name: Stop RDS
         run: |
