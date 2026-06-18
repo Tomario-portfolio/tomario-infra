@@ -218,4 +218,8 @@ resource "aws_autoscaling_group" "this" {
     value               = "tomario-${var.env}-asg"
     propagate_at_launch = false
   }
+
+  timeouts {
+    delete = "20m"
+  }
 }

@@ -8,12 +8,10 @@ on:
     paths:
       - "envs/**"
       - "modules/**"
-      - ".github/workflows/**"
   pull_request:
     paths:
       - "envs/**"
       - "modules/**"
-      - ".github/workflows/**"
 
 permissions:
   id-token: write
