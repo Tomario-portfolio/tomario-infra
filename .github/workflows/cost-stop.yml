@@ -49,5 +49,12 @@ jobs:
 
       - name: Stop RDS
         run: |
-          aws rds stop-db-instance \
-            --db-instance-identifier ${{ env.RDS_INSTANCE }}
+          STATUS=$(aws rds describe-db-instances \
+            --db-instance-identifier ${{ env.RDS_INSTANCE }} \
+            --query 'DBInstances[0].DBInstanceStatus' \
+            --output text)
+          if [ "$STATUS" = "available" ]; then
+            aws rds stop-db-instance --db-instance-identifier ${{ env.RDS_INSTANCE }}
+          else
+            echo "RDS is already in '$STATUS' state, skipping stop."
+          fi
