@@ -32,7 +32,7 @@ jobs:
     steps:
       - name: Set Matrix
         id: set-matrix
-        run: echo 'matrix={"env":["dev"]}' >> $GITHUB_OUTPUT
+        run: echo 'matrix={"env":["dev"]}' >> "$GITHUB_OUTPUT"
 
   terraform-ci:
     name: Terraform CI / ${{ matrix.env }}
