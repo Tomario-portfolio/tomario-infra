@@ -55,14 +55,3 @@ module "database" {
   private_subnet_ids = module.network.private_subnet_ids
   ec2_sg_id          = module.backend.ec2_sg_id
 }
-
-module "monitoring" {
-  source = "../../modules/monitoring"
-
-  env                     = var.env
-  alarm_email             = var.alarm_email
-  alb_arn_suffix          = module.backend.alb_arn_suffix
-  target_group_arn_suffix = module.backend.target_group_arn_suffix
-  asg_name                = module.backend.asg_name
-  db_instance_identifier  = module.database.db_instance_identifier
-}

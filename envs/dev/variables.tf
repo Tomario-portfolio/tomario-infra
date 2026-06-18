@@ -9,8 +9,3 @@ variable "env" {
   type        = string
   default     = "dev"
 }
-
-variable "alarm_email" {
-  description = "CloudWatchアラーム通知先メールアドレス"
-  type        = string
-}
