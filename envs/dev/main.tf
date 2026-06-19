@@ -56,6 +56,13 @@ module "database" {
   ec2_sg_id          = module.backend.ec2_sg_id
 }
 
+module "frontend" {
+  source = "../../modules/frontend"
+
+  env          = var.env
+  alb_dns_name = module.backend.alb_dns_name
+}
+
 module "monitoring" {
   source = "../../modules/monitoring"
 
