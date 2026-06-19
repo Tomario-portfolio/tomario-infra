@@ -1,25 +1,3 @@
-# ------------------------------------------------------------
-# SNS
-# ------------------------------------------------------------
-
-resource "aws_sns_topic" "alarm" {
-  name = "tomario-${var.env}-alarm"
-
-  tags = {
-    Name = "tomario-${var.env}-alarm"
-  }
-}
-
-resource "aws_sns_topic_subscription" "email" {
-  topic_arn = aws_sns_topic.alarm.arn
-  protocol  = "email"
-  endpoint  = var.alarm_email
-}
-
-# ------------------------------------------------------------
-# CloudWatch Alarms
-# ------------------------------------------------------------
-
 resource "aws_cloudwatch_metric_alarm" "alb_unhealthy_host" {
   alarm_name          = "tomario-${var.env}-alb-unhealthy-host"
   alarm_description   = "ALBの非ヘルシーホスト数が1以上になっています"
