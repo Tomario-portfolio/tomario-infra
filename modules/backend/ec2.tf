@@ -19,6 +19,68 @@ resource "aws_launch_template" "this" {
 
   vpc_security_group_ids = [aws_security_group.ec2.id]
 
+  user_data = base64encode(<<-EOT
+    #!/bin/bash
+    set -e
+    exec > >(tee /var/log/user-data.log) 2>&1
+
+    dnf update -y
+    dnf install -y git python3-pip mariadb105
+
+    RDS_ID="tomario-${var.env}-rds"
+
+    DB_HOST=$(aws rds describe-db-instances \
+      --db-instance-identifier "$RDS_ID" \
+      --query 'DBInstances[0].Endpoint.Address' \
+      --output text --region ap-northeast-1)
+
+    SECRET_ARN=$(aws rds describe-db-instances \
+      --db-instance-identifier "$RDS_ID" \
+      --query 'DBInstances[0].MasterUserSecret.SecretArn' \
+      --output text --region ap-northeast-1)
+
+    SECRET=$(aws secretsmanager get-secret-value \
+      --secret-id "$SECRET_ARN" \
+      --region ap-northeast-1 \
+      --query SecretString \
+      --output text)
+
+    DB_USER=$(echo "$SECRET" | python3 -c "import sys,json; print(json.load(sys.stdin)['username'])")
+    DB_PASS=$(echo "$SECRET" | python3 -c "import sys,json; print(json.load(sys.stdin)['password'])")
+
+    git clone https://github.com/Tomario-portfolio/tomario-app.git /opt/tomario-app
+    cd /opt/tomario-app
+    pip3 install -r requirements.txt
+
+    printf "SECRET_KEY=%s\nDB_HOST=%s\nDB_PORT=3306\nDB_NAME=tomario\nDB_USER=%s\nDB_PASSWORD=%s\n" \
+      "$(openssl rand -hex 32)" "$DB_HOST" "$DB_USER" "$DB_PASS" \
+      > /opt/tomario-app/.env
+
+    mysql -h "$DB_HOST" -u "$DB_USER" -p"$DB_PASS" < /opt/tomario-app/schema.sql || true
+
+    {
+    echo '[Unit]'
+    echo 'Description=Tomario Flask App'
+    echo 'After=network.target'
+    echo ''
+    echo '[Service]'
+    echo 'User=root'
+    echo 'WorkingDirectory=/opt/tomario-app'
+    echo 'EnvironmentFile=/opt/tomario-app/.env'
+    echo 'ExecStart=/usr/bin/python3 app.py'
+    echo 'Restart=always'
+    echo 'RestartSec=5'
+    echo ''
+    echo '[Install]'
+    echo 'WantedBy=multi-user.target'
+    } > /etc/systemd/system/tomario.service
+
+    systemctl daemon-reload
+    systemctl enable tomario
+    systemctl start tomario
+  EOT
+  )
+
   metadata_options {
     http_endpoint               = "enabled"
     http_tokens                 = "required"
