@@ -22,17 +22,21 @@ resource "aws_iam_role_policy_attachment" "ssm" {
   policy_arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
 }
 
-data "aws_iam_policy_document" "secrets_read" {
+data "aws_iam_policy_document" "ec2_app" {
   statement {
     actions   = ["secretsmanager:GetSecretValue"]
     resources = ["*"]
   }
+  statement {
+    actions   = ["rds:DescribeDBInstances"]
+    resources = ["*"]
+  }
 }
 
-resource "aws_iam_role_policy" "secrets_read" {
-  name   = "tomario-${var.env}-secrets-read"
+resource "aws_iam_role_policy" "ec2_app" {
+  name   = "tomario-${var.env}-ec2-app"
   role   = aws_iam_role.ec2.id
-  policy = data.aws_iam_policy_document.secrets_read.json
+  policy = data.aws_iam_policy_document.ec2_app.json
 }
 
 resource "aws_iam_instance_profile" "ec2" {
