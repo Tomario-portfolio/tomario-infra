@@ -23,29 +23,38 @@ resource "aws_cloudwatch_metric_alarm" "alb_unhealthy_host" {
   }
 }
 
-resource "aws_cloudwatch_metric_alarm" "ec2_cpu" {
-  alarm_name          = "tomario-${var.env}-ec2-cpu"
-  alarm_description   = "EC2のCPU使用率が80%以上になっています"
+resource "aws_cloudwatch_metric_alarm" "ecs_cpu" {
+  alarm_name          = "tomario-${var.env}-ecs-cpu"
+  alarm_description   = "ECSサービスのCPU使用率が80%以上になっています"
   comparison_operator = "GreaterThanOrEqualToThreshold"
   evaluation_periods  = 2
   metric_name         = "CPUUtilization"
-  namespace           = "AWS/EC2"
+  namespace           = "AWS/ECS"
   period              = 300
   statistic           = "Average"
   threshold           = 80
   treat_missing_data  = "notBreaching"
 
   dimensions = {
-    AutoScalingGroupName = var.asg_name
+    ClusterName = "tomario-${var.env}-cluster"
+    ServiceName = var.ecs_service_name
   }
 
   alarm_actions = [aws_sns_topic.alarm.arn]
   ok_actions    = [aws_sns_topic.alarm.arn]
 
   tags = {
-    Name = "tomario-${var.env}-ec2-cpu"
+    Name = "tomario-${var.env}-ecs-cpu"
   }
 }
+
+# resource "aws_cloudwatch_metric_alarm" "ec2_cpu" {（旧）
+#   alarm_name  = "tomario-${var.env}-ec2-cpu"
+#   namespace   = "AWS/EC2"
+#   dimensions = {
+#     AutoScalingGroupName = var.asg_name
+#   }
+# }
 
 resource "aws_cloudwatch_metric_alarm" "rds_cpu" {
   alarm_name          = "tomario-${var.env}-rds-cpu"

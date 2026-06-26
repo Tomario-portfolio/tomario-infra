@@ -41,10 +41,13 @@ module "network" {
 module "backend" {
   source = "../../modules/backend"
 
-  env               = var.env
-  vpc_id            = module.network.vpc_id
-  public_subnet_ids = module.network.public_subnet_ids
-  instance_type     = "t3.micro"
+  env                = var.env
+  vpc_id             = module.network.vpc_id
+  public_subnet_ids  = module.network.public_subnet_ids
+  private_subnet_ids = module.network.private_subnet_ids
+  db_host            = module.database.rds_address
+  db_secret_arn      = module.database.master_user_secret_arn
+  rds_sg_id          = module.database.rds_sg_id
 }
 
 module "database" {
@@ -53,7 +56,6 @@ module "database" {
   env                = var.env
   vpc_id             = module.network.vpc_id
   private_subnet_ids = module.network.private_subnet_ids
-  ec2_sg_id          = module.backend.ec2_sg_id
 }
 
 module "frontend" {
@@ -70,6 +72,6 @@ module "monitoring" {
   alarm_email             = var.alarm_email
   alb_arn_suffix          = module.backend.alb_arn_suffix
   target_group_arn_suffix = module.backend.target_group_arn_suffix
-  asg_name                = module.backend.asg_name
+  ecs_service_name        = module.backend.ecs_service_name
   db_instance_identifier  = module.database.db_instance_identifier
 }

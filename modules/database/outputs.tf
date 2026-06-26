@@ -17,3 +17,7 @@ output "master_user_secret_arn" {
 output "db_instance_identifier" {
   value = aws_db_instance.this.identifier
 }
+
+output "rds_sg_id" {
+  value = aws_security_group.rds.id
+}

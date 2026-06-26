@@ -1,49 +1,82 @@
-data "aws_iam_policy_document" "ec2_assume_role" {
+# Task Execution Role：ECSサービスがコンテナ起動に使う
+data "aws_iam_policy_document" "task_exec_assume_role" {
   statement {
     actions = ["sts:AssumeRole"]
     principals {
       type        = "Service"
-      identifiers = ["ec2.amazonaws.com"]
+      identifiers = ["ecs-tasks.amazonaws.com"]
     }
   }
 }
 
-resource "aws_iam_role" "ec2" {
-  name               = "tomario-${var.env}-ec2-role"
-  assume_role_policy = data.aws_iam_policy_document.ec2_assume_role.json
+resource "aws_iam_role" "task_exec" {
+  name               = "tomario-${var.env}-task-exec-role"
+  assume_role_policy = data.aws_iam_policy_document.task_exec_assume_role.json
 
   tags = {
-    Name = "tomario-${var.env}-ec2-role"
+    Name = "tomario-${var.env}-task-exec-role"
   }
 }
 
-resource "aws_iam_role_policy_attachment" "ssm" {
-  role       = aws_iam_role.ec2.name
-  policy_arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
+# ECRイメージ取得・CloudWatch Logsへの書き込みを許可するAWS管理ポリシー
+resource "aws_iam_role_policy_attachment" "task_exec" {
+  role       = aws_iam_role.task_exec.name
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"
 }
 
-data "aws_iam_policy_document" "ec2_app" {
+# Secrets ManagerからDB接続情報を取得する権限
+data "aws_iam_policy_document" "task_exec_secrets" {
   statement {
     actions   = ["secretsmanager:GetSecretValue"]
-    resources = ["*"]
+    resources = [var.db_secret_arn]
   }
+}
+
+resource "aws_iam_role_policy" "task_exec_secrets" {
+  name   = "tomario-${var.env}-task-exec-secrets"
+  role   = aws_iam_role.task_exec.id
+  policy = data.aws_iam_policy_document.task_exec_secrets.json
+}
+
+# Task Role：コンテナ（アプリ）が使う。現時点では最小権限
+data "aws_iam_policy_document" "task_assume_role" {
   statement {
-    actions   = ["rds:DescribeDBInstances"]
-    resources = ["*"]
+    actions = ["sts:AssumeRole"]
+    principals {
+      type        = "Service"
+      identifiers = ["ecs-tasks.amazonaws.com"]
+    }
   }
 }
 
-resource "aws_iam_role_policy" "ec2_app" {
-  name   = "tomario-${var.env}-ec2-app"
-  role   = aws_iam_role.ec2.id
-  policy = data.aws_iam_policy_document.ec2_app.json
-}
-
-resource "aws_iam_instance_profile" "ec2" {
-  name = "tomario-${var.env}-ec2-profile"
-  role = aws_iam_role.ec2.name
+resource "aws_iam_role" "task" {
+  name               = "tomario-${var.env}-task-role"
+  assume_role_policy = data.aws_iam_policy_document.task_assume_role.json
 
   tags = {
-    Name = "tomario-${var.env}-ec2-profile"
+    Name = "tomario-${var.env}-task-role"
   }
 }
+
+# data "aws_iam_policy_document" "ec2_assume_role" {（旧）
+#   statement {
+#     actions = ["sts:AssumeRole"]
+#     principals {
+#       type        = "Service"
+#       identifiers = ["ec2.amazonaws.com"]
+#     }
+#   }
+# }
+#
+# resource "aws_iam_role" "ec2" {
+#   name               = "tomario-${var.env}-ec2-role"
+#   assume_role_policy = data.aws_iam_policy_document.ec2_assume_role.json
+# }
+#
+# resource "aws_iam_role_policy_attachment" "ssm" {
+#   role       = aws_iam_role.ec2.name
+#   policy_arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
+# }
+#
+# resource "aws_iam_role_policy" "ec2_app" { ... }
+# resource "aws_iam_instance_profile" "ec2" { ... }

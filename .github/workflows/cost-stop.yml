@@ -11,6 +11,8 @@ env:
   AWS_REGION: ap-northeast-1
   TF_WORKING_DIR: envs/dev
   RDS_INSTANCE: tomario-dev-rds
+  ECS_CLUSTER: tomario-dev-cluster
+  ECS_SERVICE: tomario-dev-service
   TF_VAR_alarm_email: ${{ secrets.ALARM_EMAIL }}
 
 jobs:
@@ -38,14 +40,29 @@ jobs:
       - name: Terraform Init
         run: terraform init
 
-      - name: Delete ALB and ASG (SG/IAMは残す)
+      - name: Scale ECS to 0
+        run: |
+          aws ecs update-service \
+            --cluster ${{ env.ECS_CLUSTER }} \
+            --service ${{ env.ECS_SERVICE }} \
+            --desired-count 0 \
+            --region ${{ env.AWS_REGION }}
+
+      - name: Delete ALB
         run: |
           terraform destroy \
-            -target=module.backend.aws_autoscaling_group.this \
-            -target=module.backend.aws_launch_template.this \
             -target=module.backend.aws_lb_listener.http \
             -target=module.backend.aws_lb_target_group.this \
             -target=module.backend.aws_lb.this \
+            -auto-approve
+
+      - name: Delete Interface VPC Endpoints
+        run: |
+          terraform destroy \
+            -target=module.network.aws_vpc_endpoint.ecr_api \
+            -target=module.network.aws_vpc_endpoint.ecr_dkr \
+            -target=module.network.aws_vpc_endpoint.logs \
+            -target=module.network.aws_vpc_endpoint.secretsmanager \
             -auto-approve
 
       - name: Stop RDS
