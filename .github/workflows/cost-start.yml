@@ -11,6 +11,8 @@ env:
   AWS_REGION: ap-northeast-1
   TF_WORKING_DIR: envs/dev
   RDS_INSTANCE: tomario-dev-rds
+  ECS_CLUSTER: tomario-dev-cluster
+  ECS_SERVICE: tomario-dev-service
   TF_VAR_alarm_email: ${{ secrets.ALARM_EMAIL }}
 
 jobs:
@@ -63,5 +65,13 @@ jobs:
       - name: Terraform Init
         run: terraform init
 
-      - name: Create backend (terraform apply -target=module.backend)
-        run: terraform apply -target=module.backend -auto-approve
+      - name: Terraform Apply
+        run: terraform apply -auto-approve
+
+      - name: Scale ECS to 1
+        run: |
+          aws ecs update-service \
+            --cluster ${{ env.ECS_CLUSTER }} \
+            --service ${{ env.ECS_SERVICE }} \
+            --desired-count 1 \
+            --region ${{ env.AWS_REGION }}

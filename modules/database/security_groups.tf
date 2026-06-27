@@ -2,13 +2,6 @@ resource "aws_security_group" "rds" {
   name   = "tomario-${var.env}-rds-sg"
   vpc_id = var.vpc_id
 
-  ingress {
-    from_port       = 3306
-    to_port         = 3306
-    protocol        = "tcp"
-    security_groups = [var.ec2_sg_id]
-  }
-
   egress {
     from_port   = 0
     to_port     = 0
@@ -20,3 +13,6 @@ resource "aws_security_group" "rds" {
     Name = "tomario-${var.env}-rds-sg"
   }
 }
+
+# ECSタスクからの接続許可はbackendモジュールのaws_security_group_ruleで管理する
+# （backendとdatabaseの循環依存を防ぐため）
