@@ -10,7 +10,7 @@ resource "aws_security_group_rule" "ecs_to_rds" {
 
 resource "aws_ecr_repository" "this" {
   name                 = "tomario-app"
-  image_tag_mutability = "MUTABLE"
+  image_tag_mutability = "IMMUTABLE"
 
   image_scanning_configuration {
     scan_on_push = true
@@ -19,6 +19,25 @@ resource "aws_ecr_repository" "this" {
   tags = {
     Name = "tomario-app"
   }
+}
+
+resource "aws_ecr_lifecycle_policy" "this" {
+  repository = aws_ecr_repository.this.name
+
+  policy = jsonencode({
+    rules = [{
+      rulePriority = 1
+      description  = "最新5世代のみ保持"
+      selection = {
+        tagStatus   = "any"
+        countType   = "imageCountMoreThan"
+        countNumber = 5
+      }
+      action = {
+        type = "expire"
+      }
+    }]
+  })
 }
 
 resource "aws_cloudwatch_log_group" "ecs" {
