@@ -129,6 +129,6 @@ resource "aws_ecs_service" "this" {
 
   # cost-stop/startでCLIからタスク数を操作するためTerraformの管理対象外にする
   lifecycle {
-    ignore_changes = [desired_count]
+    ignore_changes = [desired_count, task_definition]
   }
 }
