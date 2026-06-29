@@ -40,6 +40,23 @@ resource "aws_ecr_lifecycle_policy" "this" {
   })
 }
 
+resource "aws_secretsmanager_secret" "flask_secret_key" {
+  name = "tomario-${var.env}-flask-secret-key"
+
+  tags = {
+    Name = "tomario-${var.env}-flask-secret-key"
+  }
+}
+
+resource "aws_secretsmanager_secret_version" "flask_secret_key" {
+  secret_id     = aws_secretsmanager_secret.flask_secret_key.id
+  secret_string = var.secret_key
+
+  lifecycle {
+    ignore_changes = [secret_string]
+  }
+}
+
 resource "aws_cloudwatch_log_group" "ecs" {
   name              = "/ecs/tomario-${var.env}"
   retention_in_days = 7
@@ -83,15 +100,14 @@ resource "aws_ecs_task_definition" "this" {
       environment = [
         { name = "DB_HOST", value = var.db_host },
         { name = "DB_PORT", value = "3306" },
-        { name = "DB_NAME", value = "tomario" },
-        { name = "SECRET_KEY", value = var.secret_key }
+        { name = "DB_NAME", value = "tomario" }
       ]
 
-      # DB_USER・DB_PASSWORDはSecrets Managerから取得して注入する
-      # valueFromの末尾の":username::"はJSONキーを指定する書式
+      # 機密情報はSecrets Managerから取得して注入する
       secrets = [
         { name = "DB_USER", valueFrom = "${var.db_secret_arn}:username::" },
-        { name = "DB_PASSWORD", valueFrom = "${var.db_secret_arn}:password::" }
+        { name = "DB_PASSWORD", valueFrom = "${var.db_secret_arn}:password::" },
+        { name = "SECRET_KEY", valueFrom = aws_secretsmanager_secret.flask_secret_key.arn }
       ]
 
       logConfiguration = {
@@ -129,6 +145,6 @@ resource "aws_ecs_service" "this" {
 
   # cost-stop/startでCLIからタスク数を操作するためTerraformの管理対象外にする
   lifecycle {
-    ignore_changes = [desired_count]
+    ignore_changes = [desired_count, task_definition]
   }
 }
