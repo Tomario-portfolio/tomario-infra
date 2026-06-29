@@ -27,8 +27,11 @@ resource "aws_iam_role_policy_attachment" "task_exec" {
 # Secrets ManagerからDB接続情報を取得する権限
 data "aws_iam_policy_document" "task_exec_secrets" {
   statement {
-    actions   = ["secretsmanager:GetSecretValue"]
-    resources = [var.db_secret_arn]
+    actions = ["secretsmanager:GetSecretValue"]
+    resources = [
+      var.db_secret_arn,
+      aws_secretsmanager_secret.flask_secret_key.arn
+    ]
   }
 }
 
