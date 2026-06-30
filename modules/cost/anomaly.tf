@@ -7,7 +7,7 @@ resource "aws_ce_anomaly_monitor" "main" {
 
 resource "aws_ce_anomaly_subscription" "main" {
   name      = "tomario-${var.env}-anomaly-subscription"
-  frequency = "IMMEDIATE"
+  frequency = "DAILY"
 
   monitor_arn_list = [aws_ce_anomaly_monitor.main.arn]
 
