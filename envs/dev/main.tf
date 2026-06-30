@@ -65,6 +65,15 @@ module "frontend" {
   alb_dns_name = module.backend.alb_dns_name
 }
 
+module "security" {
+  source = "../../modules/security"
+
+  env                 = var.env
+  aws_region          = var.aws_region
+  enable_security_hub = false
+  enable_config       = false
+}
+
 module "monitoring" {
   source = "../../modules/monitoring"
 
