@@ -84,3 +84,10 @@ module "monitoring" {
   ecs_service_name        = module.backend.ecs_service_name
   db_instance_identifier  = module.database.db_instance_identifier
 }
+
+module "cost" {
+  source = "../../modules/cost"
+
+  env         = var.env
+  alarm_email = var.alarm_email
+}
