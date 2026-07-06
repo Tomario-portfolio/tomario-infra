@@ -6,6 +6,10 @@ terraform {
       source  = "hashicorp/aws"
       version = "~> 6.0"
     }
+    random = {
+      source  = "hashicorp/random"
+      version = "~> 3.0"
+    }
   }
 
   backend "s3" {
@@ -28,6 +32,12 @@ provider "aws" {
   }
 }
 
+# CloudFront経由のリクエストであることをALBが検証するためのシークレットヘッダー値（SEC-7）
+resource "random_password" "origin_verify" {
+  length  = 32
+  special = false
+}
+
 module "network" {
   source = "../../modules/network"
 
@@ -41,13 +51,14 @@ module "network" {
 module "backend" {
   source = "../../modules/backend"
 
-  env                = var.env
-  vpc_id             = module.network.vpc_id
-  public_subnet_ids  = module.network.public_subnet_ids
-  private_subnet_ids = module.network.private_subnet_ids
-  db_host            = module.database.rds_address
-  db_secret_arn      = module.database.master_user_secret_arn
-  rds_sg_id          = module.database.rds_sg_id
+  env                        = var.env
+  vpc_id                     = module.network.vpc_id
+  public_subnet_ids          = module.network.public_subnet_ids
+  private_subnet_ids         = module.network.private_subnet_ids
+  db_host                    = module.database.rds_address
+  db_secret_arn              = module.database.master_user_secret_arn
+  rds_sg_id                  = module.database.rds_sg_id
+  origin_verify_header_value = random_password.origin_verify.result
 }
 
 module "database" {
@@ -61,8 +72,9 @@ module "database" {
 module "frontend" {
   source = "../../modules/frontend"
 
-  env          = var.env
-  alb_dns_name = module.backend.alb_dns_name
+  env                        = var.env
+  alb_dns_name               = module.backend.alb_dns_name
+  origin_verify_header_value = random_password.origin_verify.result
 }
 
 module "security" {

@@ -31,6 +31,12 @@ variable "secret_key" {
   default = "dev-secret-key-change-in-prod"
 }
 
+variable "origin_verify_header_value" {
+  type        = string
+  sensitive   = true
+  description = "CloudFrontがオリジンリクエストに付与するシークレットヘッダー値（SEC-7: ALB直アクセス拒否の検証用）"
+}
+
 # variable "instance_type" {（旧・EC2用）
 #   type    = string
 #   default = "t3.micro"
