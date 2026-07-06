@@ -41,6 +41,12 @@ resource "aws_cloudfront_distribution" "this" {
       origin_protocol_policy = "http-only"
       origin_ssl_protocols   = ["TLSv1.2"]
     }
+
+    # ALBが直アクセスを拒否できるよう、CloudFront経由であることを示すシークレットヘッダーを付与する（SEC-7）
+    custom_header {
+      name  = "X-Origin-Verify"
+      value = var.origin_verify_header_value
+    }
   }
 
   # デフォルトキャッシュビヘイビア（静的ファイル → S3）
