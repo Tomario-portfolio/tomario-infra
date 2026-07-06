@@ -11,7 +11,7 @@ resource "aws_db_instance" "this" {
   identifier = "tomario-${var.env}-rds"
 
   engine         = "mysql"
-  engine_version = "8.0"
+  engine_version = "8.4"
   instance_class = "db.t3.micro"
 
   db_name                     = var.db_name
@@ -28,9 +28,10 @@ resource "aws_db_instance" "this" {
   publicly_accessible    = false
   multi_az               = false
 
-  auto_minor_version_upgrade = true
-  deletion_protection        = false
-  skip_final_snapshot        = true
+  allow_major_version_upgrade = true
+  auto_minor_version_upgrade  = true
+  deletion_protection         = false
+  skip_final_snapshot         = true
 
   backup_retention_period = 7
   backup_window           = "18:00-19:00"
