@@ -85,7 +85,7 @@ resource "aws_ecs_task_definition" "this" {
 
   container_definitions = jsonencode([
     {
-      name      = "tomario-app"
+      name = "tomario-app"
       # 初回作成時のみ使う仮イメージ（bootstrap_image）。実イメージはCI/CDがSHAタグで直接デプロイする
       image     = var.bootstrap_image
       essential = true
