@@ -7,6 +7,20 @@ resource "aws_s3_bucket" "frontend" {
   }
 }
 
+resource "aws_s3_bucket_lifecycle_configuration" "frontend" {
+  bucket = aws_s3_bucket.frontend.id
+
+  rule {
+    id     = "intelligent-tiering-after-90-days"
+    status = "Enabled"
+
+    transition {
+      days          = 90
+      storage_class = "INTELLIGENT_TIERING"
+    }
+  }
+}
+
 resource "aws_s3_bucket_public_access_block" "frontend" {
   bucket = aws_s3_bucket.frontend.id
 
