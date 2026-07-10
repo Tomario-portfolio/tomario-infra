@@ -39,7 +39,7 @@ resource "random_password" "origin_verify" {
 }
 
 module "network" {
-  source = "../../modules/network"
+  source = "../../../modules/network"
 
   env                  = var.env
   vpc_cidr             = "10.0.0.0/16"
@@ -49,7 +49,7 @@ module "network" {
 }
 
 module "backend" {
-  source = "../../modules/backend"
+  source = "../../../modules/backend"
 
   env                        = var.env
   vpc_id                     = module.network.vpc_id
@@ -62,7 +62,7 @@ module "backend" {
 }
 
 module "database" {
-  source = "../../modules/database"
+  source = "../../../modules/database"
 
   env                = var.env
   vpc_id             = module.network.vpc_id
@@ -70,7 +70,7 @@ module "database" {
 }
 
 module "frontend" {
-  source = "../../modules/frontend"
+  source = "../../../modules/frontend"
 
   env                        = var.env
   alb_dns_name               = module.backend.alb_dns_name
@@ -78,7 +78,7 @@ module "frontend" {
 }
 
 module "security" {
-  source = "../../modules/security"
+  source = "../../../modules/security"
 
   env                 = var.env
   aws_region          = var.aws_region
@@ -87,7 +87,7 @@ module "security" {
 }
 
 module "monitoring" {
-  source = "../../modules/monitoring"
+  source = "../../../modules/monitoring"
 
   env                     = var.env
   alarm_email             = var.alarm_email
@@ -98,7 +98,7 @@ module "monitoring" {
 }
 
 module "cost" {
-  source = "../../modules/cost"
+  source = "../../../modules/cost"
 
   env         = var.env
   alarm_email = var.alarm_email

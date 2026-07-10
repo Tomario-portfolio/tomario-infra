@@ -2,6 +2,15 @@ name: Cost Stop
 
 on:
   workflow_dispatch:
+    inputs:
+      account_group:
+        description: "対象account_group（nonprod/prod）"
+        required: true
+        default: "nonprod"
+      env:
+        description: "対象env（dev/staging/production）"
+        required: true
+        default: "dev"
 
 permissions:
   id-token: write
@@ -9,16 +18,17 @@ permissions:
 
 env:
   AWS_REGION: ap-northeast-1
-  TF_WORKING_DIR: envs/dev
-  RDS_INSTANCE: tomario-dev-rds
-  ECS_CLUSTER: tomario-dev-cluster
-  ECS_SERVICE: tomario-dev-service
+  TF_WORKING_DIR: envs/${{ github.event.inputs.account_group }}/${{ github.event.inputs.env }}
+  RDS_INSTANCE: tomario-${{ github.event.inputs.env }}-rds
+  ECS_CLUSTER: tomario-${{ github.event.inputs.env }}-cluster
+  ECS_SERVICE: tomario-${{ github.event.inputs.env }}-service
   TF_VAR_alarm_email: ${{ secrets.ALARM_EMAIL }}
 
 jobs:
   cost-stop:
     name: Stop Resources
     runs-on: ubuntu-latest
+    environment: ${{ github.event.inputs.account_group }}
 
     defaults:
       run:

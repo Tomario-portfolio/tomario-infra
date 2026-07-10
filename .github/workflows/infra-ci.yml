@@ -30,12 +30,14 @@ jobs:
     steps:
       - name: Set Matrix
         id: set-matrix
-        run: echo 'matrix={"env":["dev"]}' >> "$GITHUB_OUTPUT"
+        run: |
+          echo 'matrix={"include":[{"account_group":"nonprod","env":"dev"}]}' >> "$GITHUB_OUTPUT"
 
   terraform-ci:
-    name: Terraform CI / ${{ matrix.env }}
+    name: Terraform CI / ${{ matrix.account_group }}/${{ matrix.env }}
     needs: set-matrix
     runs-on: ubuntu-latest
+    environment: ${{ matrix.account_group }}
     strategy:
       matrix: ${{ fromJson(needs.set-matrix.outputs.matrix) }}
 
@@ -56,15 +58,15 @@ jobs:
         run: terraform fmt -check -recursive
 
       - name: Terraform Init
-        working-directory: envs/${{ matrix.env }}
+        working-directory: envs/${{ matrix.account_group }}/${{ matrix.env }}
         run: terraform init
 
       - name: Terraform Validate
-        working-directory: envs/${{ matrix.env }}
+        working-directory: envs/${{ matrix.account_group }}/${{ matrix.env }}
         run: terraform validate
 
       - name: Terraform Plan
-        working-directory: envs/${{ matrix.env }}
+        working-directory: envs/${{ matrix.account_group }}/${{ matrix.env }}
         run: terraform plan -no-color
         env:
           TF_VAR_alarm_email: ${{ secrets.ALARM_EMAIL }}
@@ -82,10 +84,11 @@ jobs:
           ./actionlint
 
   terraform-cd:
-    name: Terraform CD / ${{ matrix.env }}
+    name: Terraform CD / ${{ matrix.account_group }}/${{ matrix.env }}
     needs: [set-matrix, terraform-ci]
     if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
     runs-on: ubuntu-latest
+    environment: ${{ matrix.account_group }}
     strategy:
       matrix: ${{ fromJson(needs.set-matrix.outputs.matrix) }}
 
@@ -103,11 +106,11 @@ jobs:
         uses: hashicorp/setup-terraform@v3
 
       - name: Terraform Init
-        working-directory: envs/${{ matrix.env }}
+        working-directory: envs/${{ matrix.account_group }}/${{ matrix.env }}
         run: terraform init
 
       - name: Terraform Apply
-        working-directory: envs/${{ matrix.env }}
+        working-directory: envs/${{ matrix.account_group }}/${{ matrix.env }}
         run: terraform apply -auto-approve
         env:
           TF_VAR_alarm_email: ${{ secrets.ALARM_EMAIL }}
