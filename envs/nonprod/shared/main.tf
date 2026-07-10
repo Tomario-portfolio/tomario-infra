@@ -45,3 +45,12 @@ module "cost" {
   env         = var.env
   alarm_email = var.alarm_email
 }
+
+# nonprodアカウント共通のECR（devからterraform state mvで移行、destroy/createは使わない）
+# name="tomario-app"は移行前からの既存リポジトリ名をそのまま維持（ECRはリネーム不可のため）
+module "ecr" {
+  source = "../../../modules/ecr"
+
+  env  = var.env
+  name = "tomario-app"
+}

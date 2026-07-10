@@ -26,10 +26,6 @@ output "ecs_service_name" {
   value = aws_ecs_service.this.name
 }
 
-output "ecr_repository_url" {
-  value = aws_ecr_repository.this.repository_url
-}
-
 # output "ec2_sg_id" {（旧）
 #   value = aws_security_group.ec2.id
 # }
