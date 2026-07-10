@@ -77,15 +77,6 @@ module "frontend" {
   origin_verify_header_value = random_password.origin_verify.result
 }
 
-module "security" {
-  source = "../../../modules/security"
-
-  env                 = var.env
-  aws_region          = var.aws_region
-  enable_security_hub = false
-  enable_config       = false
-}
-
 module "monitoring" {
   source = "../../../modules/monitoring"
 
@@ -95,11 +86,4 @@ module "monitoring" {
   target_group_arn_suffix = module.backend.target_group_arn_suffix
   ecs_service_name        = module.backend.ecs_service_name
   db_instance_identifier  = module.database.db_instance_identifier
-}
-
-module "cost" {
-  source = "../../../modules/cost"
-
-  env         = var.env
-  alarm_email = var.alarm_email
 }
