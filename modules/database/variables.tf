@@ -20,6 +20,16 @@ variable "db_username" {
   default = "admin"
 }
 
+variable "multi_az" {
+  type    = bool
+  default = false
+}
+
+variable "instance_class" {
+  type    = string
+  default = "db.t3.micro"
+}
+
 # variable "ecs_sg_id" {（循環依存のため削除。RDS SGへの許可はbackendモジュールで管理）
 #   type = string
 # }

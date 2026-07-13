@@ -12,7 +12,7 @@ resource "aws_db_instance" "this" {
 
   engine         = "mysql"
   engine_version = "8.4"
-  instance_class = "db.t3.micro"
+  instance_class = var.instance_class
 
   db_name                     = var.db_name
   username                    = var.db_username
@@ -26,7 +26,7 @@ resource "aws_db_instance" "this" {
   db_subnet_group_name   = aws_db_subnet_group.this.name
   vpc_security_group_ids = [aws_security_group.rds.id]
   publicly_accessible    = false
-  multi_az               = false
+  multi_az               = var.multi_az
 
   allow_major_version_upgrade = true
   auto_minor_version_upgrade  = true
