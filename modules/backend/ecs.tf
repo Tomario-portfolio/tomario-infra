@@ -115,6 +115,11 @@ resource "aws_ecs_service" "this" {
     container_port   = 8080
   }
 
+  deployment_circuit_breaker {
+    enable   = true
+    rollback = true
+  }
+
   depends_on = [aws_lb_listener.http]
 
   # cost-stop/startでCLIからタスク数を操作するためTerraformの管理対象外にする
