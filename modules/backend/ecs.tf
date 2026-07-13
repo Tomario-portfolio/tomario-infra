@@ -46,8 +46,8 @@ resource "aws_ecs_task_definition" "this" {
   family                   = "tomario-${var.env}-task"
   requires_compatibilities = ["FARGATE"]
   network_mode             = "awsvpc"
-  cpu                      = 256
-  memory                   = 512
+  cpu                      = var.task_cpu
+  memory                   = var.task_memory
   execution_role_arn       = aws_iam_role.task_exec.arn
   task_role_arn            = aws_iam_role.task.arn
 
@@ -100,7 +100,7 @@ resource "aws_ecs_service" "this" {
   name            = "tomario-${var.env}-service"
   cluster         = aws_ecs_cluster.this.id
   task_definition = aws_ecs_task_definition.this.arn
-  desired_count   = 1
+  desired_count   = var.desired_count
   launch_type     = "FARGATE"
 
   network_configuration {

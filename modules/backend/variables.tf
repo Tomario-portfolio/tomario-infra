@@ -37,6 +37,21 @@ variable "origin_verify_header_value" {
   description = "CloudFrontがオリジンリクエストに付与するシークレットヘッダー値（SEC-7: ALB直アクセス拒否の検証用）"
 }
 
+variable "task_cpu" {
+  type    = number
+  default = 256
+}
+
+variable "task_memory" {
+  type    = number
+  default = 512
+}
+
+variable "desired_count" {
+  type    = number
+  default = 1
+}
+
 variable "bootstrap_image" {
   type        = string
   default     = "public.ecr.aws/docker/library/nginx:latest"
