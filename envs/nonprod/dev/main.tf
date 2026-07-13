@@ -39,6 +39,12 @@ resource "random_password" "origin_verify" {
   special = false
 }
 
+module "logging" {
+  source = "../../../modules/logging"
+
+  env = var.env
+}
+
 module "network" {
   source = "../../../modules/network"
 
@@ -47,6 +53,7 @@ module "network" {
   azs                  = ["ap-northeast-1a", "ap-northeast-1c"]
   public_subnet_cidrs  = ["10.0.0.0/24", "10.0.1.0/24"]
   private_subnet_cidrs = ["10.0.10.0/24", "10.0.11.0/24"]
+  logs_bucket_arn      = module.logging.bucket_arn
 }
 
 module "backend" {
@@ -60,6 +67,7 @@ module "backend" {
   db_secret_arn              = module.database.master_user_secret_arn
   rds_sg_id                  = module.database.rds_sg_id
   origin_verify_header_value = random_password.origin_verify.result
+  logs_bucket_id             = module.logging.bucket_id
 }
 
 module "database" {

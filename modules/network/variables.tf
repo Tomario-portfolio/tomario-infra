@@ -18,7 +18,7 @@ variable "private_subnet_cidrs" {
   type = list(string)
 }
 
-variable "flow_log_retention_days" {
-  type    = number
-  default = 7
+variable "logs_bucket_arn" {
+  type        = string
+  description = "VPC Flow Logsの出力先S3バケットARN（modules/loggingの出力）"
 }

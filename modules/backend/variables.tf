@@ -26,6 +26,11 @@ variable "rds_sg_id" {
   type = string
 }
 
+variable "logs_bucket_id" {
+  type        = string
+  description = "ALBアクセスログの出力先S3バケット名（modules/loggingの出力）"
+}
+
 variable "secret_key" {
   type    = string
   default = "dev-secret-key-change-in-prod"
