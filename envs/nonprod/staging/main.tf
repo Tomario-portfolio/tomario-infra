@@ -45,3 +45,14 @@ module "logging" {
   env                = var.env
   log_retention_days = 30
 }
+
+module "network" {
+  source = "../../../modules/network"
+
+  env                  = var.env
+  vpc_cidr             = "10.1.0.0/16"
+  azs                  = ["ap-northeast-1a", "ap-northeast-1c"]
+  public_subnet_cidrs  = ["10.1.0.0/24", "10.1.1.0/24"]
+  private_subnet_cidrs = ["10.1.10.0/24", "10.1.11.0/24"]
+  logs_bucket_arn      = module.logging.bucket_arn
+}
