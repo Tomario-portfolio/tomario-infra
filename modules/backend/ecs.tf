@@ -27,7 +27,7 @@ resource "aws_secretsmanager_secret_version" "flask_secret_key" {
 
 resource "aws_cloudwatch_log_group" "ecs" {
   name              = "/ecs/tomario-${var.env}"
-  retention_in_days = 7
+  retention_in_days = var.log_retention_days
 
   tags = {
     Name = "tomario-${var.env}-ecs-logs"
