@@ -31,7 +31,7 @@ jobs:
       - name: Set Matrix
         id: set-matrix
         run: |
-          echo 'matrix={"include":[{"account_group":"nonprod","env":"dev"},{"account_group":"nonprod","env":"shared"}]}' >> "$GITHUB_OUTPUT"
+          echo 'matrix={"include":[{"account_group":"nonprod","env":"dev"},{"account_group":"nonprod","env":"shared"},{"account_group":"nonprod","env":"staging"}]}' >> "$GITHUB_OUTPUT"
 
   terraform-ci:
     name: Terraform CI / ${{ matrix.account_group }}/${{ matrix.env }}
