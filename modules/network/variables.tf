@@ -17,3 +17,8 @@ variable "public_subnet_cidrs" {
 variable "private_subnet_cidrs" {
   type = list(string)
 }
+
+variable "flow_log_retention_days" {
+  type    = number
+  default = 7
+}
