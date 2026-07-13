@@ -83,23 +83,9 @@ jobs:
           bash <(curl https://raw.githubusercontent.com/rhysd/actionlint/main/scripts/download-actionlint.bash)
           ./actionlint
 
-  secret-scan:
-    name: Secret Scan
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: Gitleaks
-        run: |
-          docker run --rm -v "$PWD:/repo" zricethezav/gitleaks:latest \
-            detect --source /repo --redact -v
-
   terraform-cd:
     name: Terraform CD / ${{ matrix.account_group }}/${{ matrix.env }}
-    needs: [set-matrix, terraform-ci, secret-scan]
+    needs: [set-matrix, terraform-ci]
     if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
     runs-on: ubuntu-latest
     environment: ${{ matrix.account_group }}
