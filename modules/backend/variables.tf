@@ -57,6 +57,26 @@ variable "log_retention_days" {
   default = 7
 }
 
+variable "autoscaling_enabled" {
+  type    = bool
+  default = false
+}
+
+variable "autoscaling_min_capacity" {
+  type    = number
+  default = 1
+}
+
+variable "autoscaling_max_capacity" {
+  type    = number
+  default = 1
+}
+
+variable "autoscaling_target_cpu" {
+  type    = number
+  default = 70
+}
+
 variable "bootstrap_image" {
   type        = string
   default     = "public.ecr.aws/docker/library/nginx:latest"
