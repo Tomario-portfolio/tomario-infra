@@ -1,5 +1,4 @@
 data "aws_caller_identity" "current" {}
-data "aws_elb_service_account" "main" {}
 
 resource "aws_s3_bucket" "logs" {
   bucket        = "tomario-${var.env}-logs-${data.aws_caller_identity.current.account_id}"
@@ -38,16 +37,26 @@ resource "aws_s3_bucket_policy" "logs" {
 }
 
 data "aws_iam_policy_document" "logs_bucket" {
-  # ALBアクセスログ
+  # ALBアクセスログ（logdelivery.elasticloadbalancing.amazonaws.comによるAWS Log Delivery方式）
   statement {
     sid    = "ALBAccessLogsWrite"
     effect = "Allow"
     principals {
-      type        = "AWS"
-      identifiers = [data.aws_elb_service_account.main.arn]
+      type        = "Service"
+      identifiers = ["logdelivery.elasticloadbalancing.amazonaws.com"]
     }
     actions   = ["s3:PutObject"]
-    resources = ["${aws_s3_bucket.logs.arn}/alb/*"]
+    resources = ["${aws_s3_bucket.logs.arn}/alb/AWSLogs/${data.aws_caller_identity.current.account_id}/*"]
+    condition {
+      test     = "StringEquals"
+      variable = "s3:x-amz-acl"
+      values   = ["bucket-owner-full-control"]
+    }
+    condition {
+      test     = "StringEquals"
+      variable = "aws:SourceAccount"
+      values   = [data.aws_caller_identity.current.account_id]
+    }
   }
 
   # VPC Flow Logs
