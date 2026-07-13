@@ -38,3 +38,10 @@ resource "random_password" "origin_verify" {
   length  = 32
   special = false
 }
+
+module "logging" {
+  source = "../../../modules/logging"
+
+  env                = var.env
+  log_retention_days = 30
+}
