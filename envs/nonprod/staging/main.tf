@@ -64,3 +64,23 @@ module "database" {
   vpc_id             = module.network.vpc_id
   private_subnet_ids = module.network.private_subnet_ids
 }
+
+module "backend" {
+  source = "../../../modules/backend"
+
+  env                        = var.env
+  vpc_id                     = module.network.vpc_id
+  public_subnet_ids          = module.network.public_subnet_ids
+  private_subnet_ids         = module.network.private_subnet_ids
+  db_host                    = module.database.rds_address
+  db_secret_arn              = module.database.master_user_secret_arn
+  rds_sg_id                  = module.database.rds_sg_id
+  origin_verify_header_value = random_password.origin_verify.result
+  logs_bucket_id             = module.logging.bucket_id
+  log_retention_days         = 30
+  desired_count              = 2
+  autoscaling_enabled        = true
+  autoscaling_min_capacity   = 2
+  autoscaling_max_capacity   = 4
+  autoscaling_target_cpu     = 70
+}
