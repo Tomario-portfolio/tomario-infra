@@ -92,3 +92,15 @@ module "frontend" {
   alb_dns_name               = module.backend.alb_dns_name
   origin_verify_header_value = random_password.origin_verify.result
 }
+
+module "monitoring" {
+  source = "../../../modules/monitoring"
+
+  env                          = var.env
+  alarm_email                  = var.alarm_email
+  alb_arn_suffix               = module.backend.alb_arn_suffix
+  target_group_arn_suffix      = module.backend.target_group_arn_suffix
+  ecs_service_name             = module.backend.ecs_service_name
+  db_instance_identifier       = module.database.db_instance_identifier
+  enable_autoscaling_dashboard = true
+}

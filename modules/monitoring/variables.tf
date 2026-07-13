@@ -28,6 +28,12 @@ variable "db_instance_identifier" {
   type        = string
 }
 
+variable "enable_autoscaling_dashboard" {
+  description = "ECS RunningTaskCountを可視化するCloudWatchダッシュボードを作成するか（Application Auto Scalingの挙動確認用）"
+  type        = bool
+  default     = false
+}
+
 # variable "asg_name" {（旧・EC2用）
 #   description = "Auto ScalingグループのASG名（CloudWatchアラームのディメンション用）"
 #   type        = string
