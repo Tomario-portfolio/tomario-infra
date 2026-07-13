@@ -52,6 +52,11 @@ variable "desired_count" {
   default = 1
 }
 
+variable "log_retention_days" {
+  type    = number
+  default = 7
+}
+
 variable "bootstrap_image" {
   type        = string
   default     = "public.ecr.aws/docker/library/nginx:latest"
