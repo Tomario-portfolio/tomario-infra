@@ -7,6 +7,12 @@ resource "aws_lb" "this" {
 
   enable_deletion_protection = false
 
+  access_logs {
+    bucket  = var.logs_bucket_id
+    prefix  = "alb"
+    enabled = true
+  }
+
   tags = {
     Name = "tomario-${var.env}-alb"
   }
