@@ -84,3 +84,11 @@ module "backend" {
   autoscaling_max_capacity   = 4
   autoscaling_target_cpu     = 70
 }
+
+module "frontend" {
+  source = "../../../modules/frontend"
+
+  env                        = var.env
+  alb_dns_name               = module.backend.alb_dns_name
+  origin_verify_header_value = random_password.origin_verify.result
+}
