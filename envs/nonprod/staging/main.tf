@@ -56,3 +56,11 @@ module "network" {
   private_subnet_cidrs = ["10.1.10.0/24", "10.1.11.0/24"]
   logs_bucket_arn      = module.logging.bucket_arn
 }
+
+module "database" {
+  source = "../../../modules/database"
+
+  env                = var.env
+  vpc_id             = module.network.vpc_id
+  private_subnet_ids = module.network.private_subnet_ids
+}
