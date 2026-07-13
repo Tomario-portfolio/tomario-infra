@@ -1,11 +1,15 @@
 data "aws_caller_identity" "current" {}
 
+locals {
+  bucket_name = coalesce(var.bucket_name, "tomario-${var.env}-logs-${data.aws_caller_identity.current.account_id}")
+}
+
 resource "aws_s3_bucket" "logs" {
-  bucket        = "tomario-${var.env}-logs-${data.aws_caller_identity.current.account_id}"
+  bucket        = local.bucket_name
   force_destroy = true
 
   tags = {
-    Name = "tomario-${var.env}-logs"
+    Name = local.bucket_name
   }
 }
 
@@ -94,6 +98,34 @@ data "aws_iam_policy_document" "logs_bucket" {
       test     = "StringEquals"
       variable = "aws:SourceAccount"
       values   = [data.aws_caller_identity.current.account_id]
+    }
+  }
+
+  # CloudTrail（modules/securityから移設、既存バケット・既存パスをそのまま維持）
+  statement {
+    sid    = "AWSCloudTrailAclCheck"
+    effect = "Allow"
+    principals {
+      type        = "Service"
+      identifiers = ["cloudtrail.amazonaws.com"]
+    }
+    actions   = ["s3:GetBucketAcl"]
+    resources = [aws_s3_bucket.logs.arn]
+  }
+
+  statement {
+    sid    = "AWSCloudTrailWrite"
+    effect = "Allow"
+    principals {
+      type        = "Service"
+      identifiers = ["cloudtrail.amazonaws.com"]
+    }
+    actions   = ["s3:PutObject"]
+    resources = ["${aws_s3_bucket.logs.arn}/AWSLogs/${data.aws_caller_identity.current.account_id}/*"]
+    condition {
+      test     = "StringEquals"
+      variable = "s3:x-amz-acl"
+      values   = ["bucket-owner-full-control"]
     }
   }
 }

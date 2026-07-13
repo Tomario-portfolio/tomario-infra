@@ -19,3 +19,8 @@ variable "enable_config" {
   type        = bool
   default     = false
 }
+
+variable "cloudtrail_bucket_name" {
+  description = "CloudTrailの出力先S3バケット名（modules/loggingの出力）"
+  type        = string
+}
