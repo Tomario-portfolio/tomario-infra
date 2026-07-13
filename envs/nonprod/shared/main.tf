@@ -29,14 +29,24 @@ provider "aws" {
   }
 }
 
+# nonprodアカウント共通のログ集約バケット（CloudTrailの既存バケットをそのまま引き継ぐ）
+module "logging" {
+  source = "../../../modules/logging"
+
+  env                = var.env
+  bucket_name        = "tomario-shared-cloudtrail-418295697340"
+  log_retention_days = 90
+}
+
 # nonprodアカウント共通のセキュリティ監視。軽量版（Config/SecurityHubは無効、naming_convention.md参照）
 module "security" {
   source = "../../../modules/security"
 
-  env                 = var.env
-  aws_region          = var.aws_region
-  enable_security_hub = false
-  enable_config       = false
+  env                    = var.env
+  aws_region             = var.aws_region
+  enable_security_hub    = false
+  enable_config          = false
+  cloudtrail_bucket_name = module.logging.bucket_id
 }
 
 # nonprodアカウント共通のコスト管理
