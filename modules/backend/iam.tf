@@ -61,6 +61,26 @@ resource "aws_iam_role" "task" {
   }
 }
 
+# ECS Exec（aws ecs execute-command）で使うSSMチャネル権限
+# デフォルトでは無効（enable_execute_commandをCLIで一時的に有効化した時のみ使われる）
+data "aws_iam_policy_document" "task_exec_command" {
+  statement {
+    actions = [
+      "ssmmessages:CreateControlChannel",
+      "ssmmessages:CreateDataChannel",
+      "ssmmessages:OpenControlChannel",
+      "ssmmessages:OpenDataChannel",
+    ]
+    resources = ["*"]
+  }
+}
+
+resource "aws_iam_role_policy" "task_exec_command" {
+  name   = "tomario-${var.env}-task-exec-command"
+  role   = aws_iam_role.task.id
+  policy = data.aws_iam_policy_document.task_exec_command.json
+}
+
 # data "aws_iam_policy_document" "ec2_assume_role" {（旧）
 #   statement {
 #     actions = ["sts:AssumeRole"]
