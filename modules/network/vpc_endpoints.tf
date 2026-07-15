@@ -86,3 +86,18 @@ resource "aws_vpc_endpoint" "secretsmanager" {
     Name = "tomario-${var.env}-secretsmanager-vpce"
   }
 }
+
+# ECS Exec（aws ecs execute-command）のセッション確立に必要。
+# NAT Gatewayを使わない設計のため、このエンドポイントが無いとコンテナからSSMサービスに到達できない
+resource "aws_vpc_endpoint" "ssmmessages" {
+  vpc_id              = aws_vpc.this.id
+  service_name        = "com.amazonaws.ap-northeast-1.ssmmessages"
+  vpc_endpoint_type   = "Interface"
+  subnet_ids          = aws_subnet.private[*].id
+  security_group_ids  = [aws_security_group.vpce.id]
+  private_dns_enabled = true
+
+  tags = {
+    Name = "tomario-${var.env}-ssmmessages-vpce"
+  }
+}
