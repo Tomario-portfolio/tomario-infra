@@ -73,6 +73,7 @@ jobs:
             -target=module.network.aws_vpc_endpoint.ecr_dkr \
             -target=module.network.aws_vpc_endpoint.logs \
             -target=module.network.aws_vpc_endpoint.secretsmanager \
+            -target=module.network.aws_vpc_endpoint.ssmmessages \
             -auto-approve
 
       - name: Stop RDS
