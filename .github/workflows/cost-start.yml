@@ -78,10 +78,14 @@ jobs:
       - name: Terraform Apply
         run: terraform apply -auto-approve
 
-      - name: Scale ECS to 1
+      - name: Scale ECS to desired count
         run: |
+          case "${{ github.event.inputs.env }}" in
+            staging) DESIRED_COUNT=2 ;;
+            *) DESIRED_COUNT=1 ;;
+          esac
           aws ecs update-service \
             --cluster ${{ env.ECS_CLUSTER }} \
             --service ${{ env.ECS_SERVICE }} \
-            --desired-count 1 \
+            --desired-count $DESIRED_COUNT \
             --region ${{ env.AWS_REGION }}
