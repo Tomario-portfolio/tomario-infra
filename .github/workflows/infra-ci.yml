@@ -28,10 +28,76 @@ jobs:
     outputs:
       matrix: ${{ steps.set-matrix.outputs.matrix }}
     steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Determine changed files
+        id: changed
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            BASE_SHA="${{ github.event.pull_request.base.sha }}"
+          else
+            BASE_SHA="${{ github.event.before }}"
+          fi
+
+          # workflow_dispatch（差分の概念が無い手動実行）や、diffの基点が無効な場合は安全側に倒して全env対象にする
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] || [ -z "$BASE_SHA" ] || ! git cat-file -e "$BASE_SHA" 2>/dev/null; then
+            echo "full_matrix=true" >> "$GITHUB_OUTPUT"
+            echo "changed_files=" >> "$GITHUB_OUTPUT"
+          else
+            echo "full_matrix=false" >> "$GITHUB_OUTPUT"
+            FILES=$(git diff --name-only "$BASE_SHA" "${{ github.sha }}")
+            {
+              echo "changed_files<<EOF_CHANGED_FILES"
+              echo "$FILES"
+              echo "EOF_CHANGED_FILES"
+            } >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Set Matrix
         id: set-matrix
         run: |
-          echo 'matrix={"include":[{"account_group":"nonprod","env":"dev"},{"account_group":"nonprod","env":"shared"},{"account_group":"nonprod","env":"staging"}]}' >> "$GITHUB_OUTPUT"
+          ENVS_DIR="envs/nonprod"
+          ALL_ENVS=$(ls "$ENVS_DIR")
+
+          if [ "${{ steps.changed.outputs.full_matrix }}" = "true" ]; then
+            AFFECTED="$ALL_ENVS"
+          else
+            FILES="${{ steps.changed.outputs.changed_files }}"
+            AFFECTED=""
+
+            # envs/nonprod/{env}/** 自体の変更 → そのenvを対象に追加
+            for e in $ALL_ENVS; do
+              if echo "$FILES" | grep -q "^envs/nonprod/${e}/"; then
+                AFFECTED="$AFFECTED $e"
+              fi
+            done
+
+            # modules/{name}/** の変更 → そのmoduleを実際に呼んでいるenvだけを対象に追加
+            CHANGED_MODULES=$(echo "$FILES" | sed -n 's|^modules/\([^/]*\)/.*|\1|p' | sort -u)
+            for mod in $CHANGED_MODULES; do
+              for e in $ALL_ENVS; do
+                if grep -q "module \"${mod}\"" "${ENVS_DIR}/${e}/main.tf" 2>/dev/null; then
+                  AFFECTED="$AFFECTED $e"
+                fi
+              done
+            done
+
+            AFFECTED=$(echo "$AFFECTED" | tr ' ' '\n' | grep -v '^$' | sort -u | tr '\n' ' ')
+
+            # 変更内容からenvを1つも特定できなかった場合は、見逃しを避けるため安全側に倒して全env対象にする
+            if [ -z "$(echo "$AFFECTED" | tr -d '[:space:]')" ]; then
+              AFFECTED="$ALL_ENVS"
+            fi
+          fi
+
+          echo "Affected envs: $AFFECTED"
+          MATRIX_JSON=$(echo "$AFFECTED" | tr ' ' '\n' | grep -v '^$' | sort -u | \
+            jq -R -s -c '{"include": (split("\n") | map(select(length > 0)) | map({"account_group":"nonprod","env":.}))}')
+
+          echo "matrix=$MATRIX_JSON" >> "$GITHUB_OUTPUT"
 
   terraform-ci:
     name: Terraform CI / ${{ matrix.account_group }}/${{ matrix.env }}
