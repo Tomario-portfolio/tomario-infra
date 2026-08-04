@@ -85,7 +85,19 @@ variable "autoscaling_target_cpu" {
 variable "bootstrap_image" {
   type        = string
   default     = "418295697340.dkr.ecr.ap-northeast-1.amazonaws.com/tomario-app:bootstrap"
-  description = "Terraformが初回にタスク定義を作成する際にのみ使う仮イメージ。プライベートサブネットのみのVPCからpublic.ecr.awsに到達できずpull失敗する問題があったため、private ECR（tomario-app:bootstrapタグ）参照に変更。実イメージはtomario-app側のCI/CDがデプロイ時に上書きする（aws_ecs_serviceのignore_changesで以降は管理対象外）"
+  description = "Terraformが初回にタスク定義を作成する際にのみ使う仮イメージ。プライベートサブネットのみのVPCからpublic.ecr.awsに到達できずpull失敗する問題があったため、private ECR（tomario-app:bootstrapタグ）参照に変更。実イメージはtomario-app側のCI/CDがデプロイ時に上書きする（aws_ecs_serviceのignore_changesで以降は管理対象外）。production環境は別アカウント・別リポジトリ（tomario-production-app）のため呼び出し側で明示的に上書きすること"
+}
+
+variable "alb_deletion_protection" {
+  type        = bool
+  default     = false
+  description = "ALBの削除保護。dev/stagingはcost-stopでALB自体を削除するためfalse固定。productionはリリース前はcost-stop対象のためfalse、常時稼働に切り替えるリリース後はtrueにする"
+}
+
+variable "container_insights_enabled" {
+  type        = bool
+  default     = false
+  description = "ECSクラスターのContainer Insightsを有効化するか。stagingはRunningTaskCountメトリクスが表示できない既知の問題があるが（todo.md #1）、production環境は最初から有効化する"
 }
 
 # variable "instance_type" {（旧・EC2用）

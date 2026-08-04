@@ -37,6 +37,11 @@ resource "aws_cloudwatch_log_group" "ecs" {
 resource "aws_ecs_cluster" "this" {
   name = "tomario-${var.env}-cluster"
 
+  setting {
+    name  = "containerInsights"
+    value = var.container_insights_enabled ? "enabled" : "disabled"
+  }
+
   tags = {
     Name = "tomario-${var.env}-cluster"
   }
