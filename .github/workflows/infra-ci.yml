@@ -26,7 +26,13 @@ jobs:
     name: Set Matrix
     runs-on: ubuntu-latest
     outputs:
-      matrix: ${{ steps.set-matrix.outputs.matrix }}
+      component: ${{ steps.set-matrix.outputs.component }}
+      flat: ${{ steps.set-matrix.outputs.flat }}
+      cd_logging: ${{ steps.set-matrix.outputs.cd_logging }}
+      cd_network: ${{ steps.set-matrix.outputs.cd_network }}
+      cd_database: ${{ steps.set-matrix.outputs.cd_database }}
+      cd_backend: ${{ steps.set-matrix.outputs.cd_backend }}
+      cd_frontend_monitoring: ${{ steps.set-matrix.outputs.cd_frontend_monitoring }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -42,7 +48,7 @@ jobs:
             BASE_SHA="${{ github.event.before }}"
           fi
 
-          # workflow_dispatch（差分の概念が無い手動実行）や、diffの基点が無効な場合は安全側に倒して全env対象にする
+          # workflow_dispatch（差分の概念が無い手動実行）や、diffの基点が無効な場合は安全側に倒して全対象にする
           if [ "${{ github.event_name }}" = "workflow_dispatch" ] || [ -z "$BASE_SHA" ] || ! git cat-file -e "$BASE_SHA" 2>/dev/null; then
             echo "full_matrix=true" >> "$GITHUB_OUTPUT"
             echo "changed_files=" >> "$GITHUB_OUTPUT"
@@ -60,52 +66,141 @@ jobs:
         id: set-matrix
         run: |
           ENVS_DIR="envs/nonprod"
-          ALL_ENVS=$(ls "$ENVS_DIR")
+          # dev/stagingはコンポーネント単位（logging/network/database/backend/frontend/monitoring）でstateを分割済み。
+          # sharedは今まで通りアカウント単位のシングルトンリソースをまとめた単一state。
+          SPLIT_ENVS="dev staging"
+          FLAT_ENVS="shared"
+          COMPONENTS="logging network database backend frontend monitoring"
 
           if [ "${{ steps.changed.outputs.full_matrix }}" = "true" ]; then
-            AFFECTED="$ALL_ENVS"
+            COMPONENT_PAIRS=""
+            for e in $SPLIT_ENVS; do
+              for c in $COMPONENTS; do
+                COMPONENT_PAIRS="$COMPONENT_PAIRS $e:$c"
+              done
+            done
+            FLAT_LIST="$FLAT_ENVS"
           else
             FILES="${{ steps.changed.outputs.changed_files }}"
-            AFFECTED=""
+            COMPONENT_PAIRS=""
+            FLAT_LIST=""
 
-            # envs/nonprod/{env}/** 自体の変更 → そのenvを対象に追加
-            for e in $ALL_ENVS; do
-              if echo "$FILES" | grep -q "^envs/nonprod/${e}/"; then
-                AFFECTED="$AFFECTED $e"
-              fi
-            done
-
-            # modules/{name}/** の変更 → そのmoduleを実際に呼んでいるenvだけを対象に追加
-            CHANGED_MODULES=$(echo "$FILES" | sed -n 's|^modules/\([^/]*\)/.*|\1|p' | sort -u)
-            for mod in $CHANGED_MODULES; do
-              for e in $ALL_ENVS; do
-                if grep -q "module \"${mod}\"" "${ENVS_DIR}/${e}/main.tf" 2>/dev/null; then
-                  AFFECTED="$AFFECTED $e"
+            # envs/nonprod/{env}/{component}/** の変更 → そのenv:componentを対象に追加
+            for e in $SPLIT_ENVS; do
+              for c in $COMPONENTS; do
+                if echo "$FILES" | grep -q "^${ENVS_DIR}/${e}/${c}/"; then
+                  COMPONENT_PAIRS="$COMPONENT_PAIRS $e:$c"
                 fi
               done
             done
 
-            AFFECTED=$(echo "$AFFECTED" | tr ' ' '\n' | grep -v '^$' | sort -u | tr '\n' ' ')
+            # envs/nonprod/{shared}/** の変更 → そのenvを対象に追加
+            for e in $FLAT_ENVS; do
+              if echo "$FILES" | grep -q "^${ENVS_DIR}/${e}/"; then
+                FLAT_LIST="$FLAT_LIST $e"
+              fi
+            done
 
-            # 変更内容からenvを1つも特定できなかった場合は、見逃しを避けるため安全側に倒して全env対象にする
-            if [ -z "$(echo "$AFFECTED" | tr -d '[:space:]')" ]; then
-              AFFECTED="$ALL_ENVS"
+            # modules/{name}/** の変更
+            CHANGED_MODULES=$(echo "$FILES" | sed -n 's|^modules/\([^/]*\)/.*|\1|p' | sort -u)
+            for mod in $CHANGED_MODULES; do
+              # split env側は、component名 == module名なのでそのまま対応付けられる
+              if echo "$COMPONENTS" | tr ' ' '\n' | grep -qx "$mod"; then
+                for e in $SPLIT_ENVS; do
+                  COMPONENT_PAIRS="$COMPONENT_PAIRS $e:$mod"
+                done
+              fi
+              # flat env側は、そのenvのmain.tfが実際にそのmoduleを呼んでいるかで判定（従来通り）
+              for e in $FLAT_ENVS; do
+                if grep -q "module \"${mod}\"" "${ENVS_DIR}/${e}/main.tf" 2>/dev/null; then
+                  FLAT_LIST="$FLAT_LIST $e"
+                fi
+              done
+            done
+
+            COMPONENT_PAIRS=$(echo "$COMPONENT_PAIRS" | tr ' ' '\n' | grep -v '^$' | sort -u | tr '\n' ' ')
+            FLAT_LIST=$(echo "$FLAT_LIST" | tr ' ' '\n' | grep -v '^$' | sort -u | tr '\n' ' ')
+
+            # 変更内容から何も特定できなかった場合は、見逃しを避けるため安全側に倒して全対象にする
+            if [ -z "$(echo "${COMPONENT_PAIRS}${FLAT_LIST}" | tr -d '[:space:]')" ]; then
+              for e in $SPLIT_ENVS; do
+                for c in $COMPONENTS; do
+                  COMPONENT_PAIRS="$COMPONENT_PAIRS $e:$c"
+                done
+              done
+              FLAT_LIST="$FLAT_ENVS"
             fi
           fi
 
-          echo "Affected envs: $AFFECTED"
-          MATRIX_JSON=$(echo "$AFFECTED" | tr ' ' '\n' | grep -v '^$' | sort -u | \
-            jq -R -s -c '{"include": (split("\n") | map(select(length > 0)) | map({"account_group":"nonprod","env":.}))}')
+          echo "Affected component pairs: $COMPONENT_PAIRS"
+          echo "Affected flat envs: $FLAT_LIST"
 
-          echo "matrix=$MATRIX_JSON" >> "$GITHUB_OUTPUT"
+          COMPONENT_JSON=$(echo "$COMPONENT_PAIRS" | tr ' ' '\n' | grep -v '^$' | \
+            awk -F: '{printf "{\"account_group\":\"nonprod\",\"env\":\"%s\",\"component\":\"%s\"}\n", $1, $2}' | \
+            jq -s -c '.')
 
-  terraform-ci:
+          FLAT_JSON=$(echo "$FLAT_LIST" | tr ' ' '\n' | \
+            jq -R -s -c 'split("\n") | map(select(length > 0)) | map({"account_group":"nonprod","env":.})')
+
+          tier_matrix() {
+            # $1: スペース区切りのcomponent名（このtierに含めるもの）
+            echo "$COMPONENT_JSON" | jq -c --arg comps "$1" \
+              '{"include": [.[] | select(.component as $c | ($comps | split(" ")) | index($c))]}'
+          }
+
+          echo "component=$(echo "$COMPONENT_JSON" | jq -c '{"include": .}')" >> "$GITHUB_OUTPUT"
+          echo "flat=$(echo "$FLAT_JSON" | jq -c '{"include": .}')" >> "$GITHUB_OUTPUT"
+          echo "cd_logging=$(tier_matrix "logging")" >> "$GITHUB_OUTPUT"
+          echo "cd_network=$(tier_matrix "network")" >> "$GITHUB_OUTPUT"
+          echo "cd_database=$(tier_matrix "database")" >> "$GITHUB_OUTPUT"
+          echo "cd_backend=$(tier_matrix "backend")" >> "$GITHUB_OUTPUT"
+          echo "cd_frontend_monitoring=$(tier_matrix "frontend monitoring")" >> "$GITHUB_OUTPUT"
+
+  terraform-ci-component:
+    name: Terraform CI / ${{ matrix.account_group }}/${{ matrix.env }}/${{ matrix.component }}
+    needs: set-matrix
+    runs-on: ubuntu-latest
+    environment: ${{ matrix.account_group }}
+    strategy:
+      matrix: ${{ fromJson(needs.set-matrix.outputs.component) }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+
+      - name: Terraform Format Check
+        run: terraform fmt -check -recursive
+
+      - name: Terraform Init
+        working-directory: envs/${{ matrix.account_group }}/${{ matrix.env }}/${{ matrix.component }}
+        run: terraform init
+
+      - name: Terraform Validate
+        working-directory: envs/${{ matrix.account_group }}/${{ matrix.env }}/${{ matrix.component }}
+        run: terraform validate
+
+      - name: Terraform Plan
+        working-directory: envs/${{ matrix.account_group }}/${{ matrix.env }}/${{ matrix.component }}
+        run: terraform plan -no-color
+        env:
+          TF_VAR_alarm_email: ${{ secrets.ALARM_EMAIL }}
+
+  terraform-ci-flat:
     name: Terraform CI / ${{ matrix.account_group }}/${{ matrix.env }}
     needs: set-matrix
     runs-on: ubuntu-latest
     environment: ${{ matrix.account_group }}
     strategy:
-      matrix: ${{ fromJson(needs.set-matrix.outputs.matrix) }}
+      matrix: ${{ fromJson(needs.set-matrix.outputs.flat) }}
 
     steps:
       - name: Checkout
@@ -149,32 +244,165 @@ jobs:
           bash <(curl https://raw.githubusercontent.com/rhysd/actionlint/main/scripts/download-actionlint.bash)
           ./actionlint
 
-  terraform-cd:
-    name: Terraform CD / ${{ matrix.account_group }}/${{ matrix.env }}
-    needs: [set-matrix, terraform-ci]
+  # componentのCDは依存順（logging→network→database→backend→frontend/monitoring）に直列実行する。
+  # 分割前は単一state内でTerraformが依存関係を自動解決していたが、分割後は参照先が
+  # 実際にapply済みでないと参照元のplan/applyが失敗するため、順序を明示的に固定する必要がある。
+  terraform-cd-logging:
+    name: Terraform CD / ${{ matrix.account_group }}/${{ matrix.env }}/logging
+    needs: [set-matrix, terraform-ci-component]
     if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
     runs-on: ubuntu-latest
     environment: ${{ matrix.account_group }}
     strategy:
-      matrix: ${{ fromJson(needs.set-matrix.outputs.matrix) }}
-
+      matrix: ${{ fromJson(needs.set-matrix.outputs.cd_logging) }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
-
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
+      - name: Terraform Init
+        working-directory: envs/${{ matrix.account_group }}/${{ matrix.env }}/${{ matrix.component }}
+        run: terraform init
+      - name: Terraform Apply
+        working-directory: envs/${{ matrix.account_group }}/${{ matrix.env }}/${{ matrix.component }}
+        run: terraform apply -auto-approve
+        env:
+          TF_VAR_alarm_email: ${{ secrets.ALARM_EMAIL }}
 
+  terraform-cd-network:
+    name: Terraform CD / ${{ matrix.account_group }}/${{ matrix.env }}/network
+    needs: [set-matrix, terraform-cd-logging]
+    if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+    runs-on: ubuntu-latest
+    environment: ${{ matrix.account_group }}
+    strategy:
+      matrix: ${{ fromJson(needs.set-matrix.outputs.cd_network) }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+      - name: Terraform Init
+        working-directory: envs/${{ matrix.account_group }}/${{ matrix.env }}/${{ matrix.component }}
+        run: terraform init
+      - name: Terraform Apply
+        working-directory: envs/${{ matrix.account_group }}/${{ matrix.env }}/${{ matrix.component }}
+        run: terraform apply -auto-approve
+        env:
+          TF_VAR_alarm_email: ${{ secrets.ALARM_EMAIL }}
+
+  terraform-cd-database:
+    name: Terraform CD / ${{ matrix.account_group }}/${{ matrix.env }}/database
+    needs: [set-matrix, terraform-cd-network]
+    if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+    runs-on: ubuntu-latest
+    environment: ${{ matrix.account_group }}
+    strategy:
+      matrix: ${{ fromJson(needs.set-matrix.outputs.cd_database) }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+      - name: Terraform Init
+        working-directory: envs/${{ matrix.account_group }}/${{ matrix.env }}/${{ matrix.component }}
+        run: terraform init
+      - name: Terraform Apply
+        working-directory: envs/${{ matrix.account_group }}/${{ matrix.env }}/${{ matrix.component }}
+        run: terraform apply -auto-approve
+        env:
+          TF_VAR_alarm_email: ${{ secrets.ALARM_EMAIL }}
+
+  terraform-cd-backend:
+    name: Terraform CD / ${{ matrix.account_group }}/${{ matrix.env }}/backend
+    needs: [set-matrix, terraform-cd-database]
+    if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+    runs-on: ubuntu-latest
+    environment: ${{ matrix.account_group }}
+    strategy:
+      matrix: ${{ fromJson(needs.set-matrix.outputs.cd_backend) }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+      - name: Terraform Init
+        working-directory: envs/${{ matrix.account_group }}/${{ matrix.env }}/${{ matrix.component }}
+        run: terraform init
+      - name: Terraform Apply
+        working-directory: envs/${{ matrix.account_group }}/${{ matrix.env }}/${{ matrix.component }}
+        run: terraform apply -auto-approve
+        env:
+          TF_VAR_alarm_email: ${{ secrets.ALARM_EMAIL }}
+
+  terraform-cd-frontend-monitoring:
+    name: Terraform CD / ${{ matrix.account_group }}/${{ matrix.env }}/${{ matrix.component }}
+    needs: [set-matrix, terraform-cd-backend]
+    if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+    runs-on: ubuntu-latest
+    environment: ${{ matrix.account_group }}
+    strategy:
+      matrix: ${{ fromJson(needs.set-matrix.outputs.cd_frontend_monitoring) }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+      - name: Terraform Init
+        working-directory: envs/${{ matrix.account_group }}/${{ matrix.env }}/${{ matrix.component }}
+        run: terraform init
+      - name: Terraform Apply
+        working-directory: envs/${{ matrix.account_group }}/${{ matrix.env }}/${{ matrix.component }}
+        run: terraform apply -auto-approve
+        env:
+          TF_VAR_alarm_email: ${{ secrets.ALARM_EMAIL }}
+
+  terraform-cd-flat:
+    name: Terraform CD / ${{ matrix.account_group }}/${{ matrix.env }}
+    needs: [set-matrix, terraform-ci-flat]
+    if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+    runs-on: ubuntu-latest
+    environment: ${{ matrix.account_group }}
+    strategy:
+      matrix: ${{ fromJson(needs.set-matrix.outputs.flat) }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
       - name: Terraform Init
         working-directory: envs/${{ matrix.account_group }}/${{ matrix.env }}
         run: terraform init
-
       - name: Terraform Apply
         working-directory: envs/${{ matrix.account_group }}/${{ matrix.env }}
         run: terraform apply -auto-approve
