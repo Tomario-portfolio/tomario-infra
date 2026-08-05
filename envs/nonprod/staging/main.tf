@@ -60,12 +60,14 @@ data "terraform_remote_state" "network" {
   }
 }
 
-module "database" {
-  source = "../../../modules/database"
+data "terraform_remote_state" "database" {
+  backend = "s3"
 
-  env                = var.env
-  vpc_id             = data.terraform_remote_state.network.outputs.vpc_id
-  private_subnet_ids = data.terraform_remote_state.network.outputs.private_subnet_ids
+  config = {
+    bucket = "tomario-tfstate-nonprod"
+    key    = "staging/database/terraform.tfstate"
+    region = "ap-northeast-1"
+  }
 }
 
 module "backend" {
@@ -75,9 +77,9 @@ module "backend" {
   vpc_id                     = data.terraform_remote_state.network.outputs.vpc_id
   public_subnet_ids          = data.terraform_remote_state.network.outputs.public_subnet_ids
   private_subnet_ids         = data.terraform_remote_state.network.outputs.private_subnet_ids
-  db_host                    = module.database.rds_address
-  db_secret_arn              = module.database.master_user_secret_arn
-  rds_sg_id                  = module.database.rds_sg_id
+  db_host                    = data.terraform_remote_state.database.outputs.rds_address
+  db_secret_arn              = data.terraform_remote_state.database.outputs.master_user_secret_arn
+  rds_sg_id                  = data.terraform_remote_state.database.outputs.rds_sg_id
   origin_verify_header_value = random_password.origin_verify.result
   logs_bucket_id             = data.terraform_remote_state.logging.outputs.bucket_id
   log_retention_days         = 30
@@ -104,6 +106,6 @@ module "monitoring" {
   alb_arn_suffix               = module.backend.alb_arn_suffix
   target_group_arn_suffix      = module.backend.target_group_arn_suffix
   ecs_service_name             = module.backend.ecs_service_name
-  db_instance_identifier       = module.database.db_instance_identifier
+  db_instance_identifier       = data.terraform_remote_state.database.outputs.db_instance_identifier
   enable_autoscaling_dashboard = true
 }
