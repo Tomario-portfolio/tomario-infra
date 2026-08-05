@@ -39,10 +39,15 @@ resource "random_password" "origin_verify" {
   special = false
 }
 
-module "logging" {
-  source = "../../../modules/logging"
+# state分割（コンポーネント単位）でlogging用stateを独立させたため、リモートで参照する
+data "terraform_remote_state" "logging" {
+  backend = "s3"
 
-  env = var.env
+  config = {
+    bucket = "tomario-tfstate-nonprod"
+    key    = "dev/logging/terraform.tfstate"
+    region = "ap-northeast-1"
+  }
 }
 
 module "network" {
@@ -53,7 +58,7 @@ module "network" {
   azs                  = ["ap-northeast-1a", "ap-northeast-1c"]
   public_subnet_cidrs  = ["10.0.0.0/24", "10.0.1.0/24"]
   private_subnet_cidrs = ["10.0.10.0/24", "10.0.11.0/24"]
-  logs_bucket_arn      = module.logging.bucket_arn
+  logs_bucket_arn      = data.terraform_remote_state.logging.outputs.bucket_arn
 }
 
 module "backend" {
@@ -67,7 +72,7 @@ module "backend" {
   db_secret_arn              = module.database.master_user_secret_arn
   rds_sg_id                  = module.database.rds_sg_id
   origin_verify_header_value = random_password.origin_verify.result
-  logs_bucket_id             = module.logging.bucket_id
+  logs_bucket_id             = data.terraform_remote_state.logging.outputs.bucket_id
 }
 
 module "database" {
