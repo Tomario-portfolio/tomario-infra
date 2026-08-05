@@ -161,6 +161,7 @@ jobs:
   terraform-ci-component:
     name: Terraform CI / ${{ matrix.account_group }}/${{ matrix.env }}/${{ matrix.component }}
     needs: set-matrix
+    if: needs.set-matrix.outputs.component != '{"include":[]}'
     runs-on: ubuntu-latest
     environment: ${{ matrix.account_group }}
     strategy:
@@ -204,6 +205,7 @@ jobs:
   terraform-ci-flat:
     name: Terraform CI / ${{ matrix.account_group }}/${{ matrix.env }}
     needs: set-matrix
+    if: needs.set-matrix.outputs.flat != '{"include":[]}'
     runs-on: ubuntu-latest
     environment: ${{ matrix.account_group }}
     strategy:
@@ -257,7 +259,11 @@ jobs:
   terraform-cd-logging:
     name: Terraform CD / ${{ matrix.account_group }}/${{ matrix.env }}/logging
     needs: [set-matrix, terraform-ci-component]
-    if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+    if: |
+      always() &&
+      (needs.terraform-ci-component.result == 'success' || needs.terraform-ci-component.result == 'skipped') &&
+      needs.set-matrix.outputs.cd_logging != '{"include":[]}' &&
+      github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
     runs-on: ubuntu-latest
     environment: ${{ matrix.account_group }}
     strategy:
@@ -284,7 +290,11 @@ jobs:
   terraform-cd-network:
     name: Terraform CD / ${{ matrix.account_group }}/${{ matrix.env }}/network
     needs: [set-matrix, terraform-cd-logging]
-    if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+    if: |
+      always() &&
+      (needs.terraform-cd-logging.result == 'success' || needs.terraform-cd-logging.result == 'skipped') &&
+      needs.set-matrix.outputs.cd_network != '{"include":[]}' &&
+      github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
     runs-on: ubuntu-latest
     environment: ${{ matrix.account_group }}
     strategy:
@@ -311,7 +321,11 @@ jobs:
   terraform-cd-database:
     name: Terraform CD / ${{ matrix.account_group }}/${{ matrix.env }}/database
     needs: [set-matrix, terraform-cd-network]
-    if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+    if: |
+      always() &&
+      (needs.terraform-cd-network.result == 'success' || needs.terraform-cd-network.result == 'skipped') &&
+      needs.set-matrix.outputs.cd_database != '{"include":[]}' &&
+      github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
     runs-on: ubuntu-latest
     environment: ${{ matrix.account_group }}
     strategy:
@@ -338,7 +352,11 @@ jobs:
   terraform-cd-backend:
     name: Terraform CD / ${{ matrix.account_group }}/${{ matrix.env }}/backend
     needs: [set-matrix, terraform-cd-database]
-    if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+    if: |
+      always() &&
+      (needs.terraform-cd-database.result == 'success' || needs.terraform-cd-database.result == 'skipped') &&
+      needs.set-matrix.outputs.cd_backend != '{"include":[]}' &&
+      github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
     runs-on: ubuntu-latest
     environment: ${{ matrix.account_group }}
     strategy:
@@ -365,7 +383,11 @@ jobs:
   terraform-cd-frontend-monitoring:
     name: Terraform CD / ${{ matrix.account_group }}/${{ matrix.env }}/${{ matrix.component }}
     needs: [set-matrix, terraform-cd-backend]
-    if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+    if: |
+      always() &&
+      (needs.terraform-cd-backend.result == 'success' || needs.terraform-cd-backend.result == 'skipped') &&
+      needs.set-matrix.outputs.cd_frontend_monitoring != '{"include":[]}' &&
+      github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
     runs-on: ubuntu-latest
     environment: ${{ matrix.account_group }}
     strategy:
@@ -392,7 +414,11 @@ jobs:
   terraform-cd-flat:
     name: Terraform CD / ${{ matrix.account_group }}/${{ matrix.env }}
     needs: [set-matrix, terraform-ci-flat]
-    if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+    if: |
+      always() &&
+      (needs.terraform-ci-flat.result == 'success' || needs.terraform-ci-flat.result == 'skipped') &&
+      needs.set-matrix.outputs.flat != '{"include":[]}' &&
+      github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
     runs-on: ubuntu-latest
     environment: ${{ matrix.account_group }}
     strategy:
