@@ -148,13 +148,15 @@ jobs:
               '{"include": [.[] | select(.component as $c | ($comps | split(" ")) | index($c))]}'
           }
 
-          echo "component=$(echo "$COMPONENT_JSON" | jq -c '{"include": .}')" >> "$GITHUB_OUTPUT"
-          echo "flat=$(echo "$FLAT_JSON" | jq -c '{"include": .}')" >> "$GITHUB_OUTPUT"
-          echo "cd_logging=$(tier_matrix "logging")" >> "$GITHUB_OUTPUT"
-          echo "cd_network=$(tier_matrix "network")" >> "$GITHUB_OUTPUT"
-          echo "cd_database=$(tier_matrix "database")" >> "$GITHUB_OUTPUT"
-          echo "cd_backend=$(tier_matrix "backend")" >> "$GITHUB_OUTPUT"
-          echo "cd_frontend_monitoring=$(tier_matrix "frontend monitoring")" >> "$GITHUB_OUTPUT"
+          {
+            echo "component=$(echo "$COMPONENT_JSON" | jq -c '{"include": .}')"
+            echo "flat=$(echo "$FLAT_JSON" | jq -c '{"include": .}')"
+            echo "cd_logging=$(tier_matrix "logging")"
+            echo "cd_network=$(tier_matrix "network")"
+            echo "cd_database=$(tier_matrix "database")"
+            echo "cd_backend=$(tier_matrix "backend")"
+            echo "cd_frontend_monitoring=$(tier_matrix "frontend monitoring")"
+          } >> "$GITHUB_OUTPUT"
 
   terraform-ci-component:
     name: Terraform CI / ${{ matrix.account_group }}/${{ matrix.env }}/${{ matrix.component }}
