@@ -18,7 +18,10 @@ permissions:
 
 env:
   AWS_REGION: ap-northeast-1
-  TF_WORKING_DIR: envs/${{ github.event.inputs.account_group }}/${{ github.event.inputs.env }}
+  # state分割（コンポーネント単位）に伴い、ALBはbackend、VPCエンドポイントはnetworkの
+  # 各コンポーネントディレクトリに対してterraform destroyを実行する
+  BACKEND_DIR: envs/${{ github.event.inputs.account_group }}/${{ github.event.inputs.env }}/backend
+  NETWORK_DIR: envs/${{ github.event.inputs.account_group }}/${{ github.event.inputs.env }}/network
   RDS_INSTANCE: tomario-${{ github.event.inputs.env }}-rds
   ECS_CLUSTER: tomario-${{ github.event.inputs.env }}-cluster
   ECS_SERVICE: tomario-${{ github.event.inputs.env }}-service
@@ -29,10 +32,6 @@ jobs:
     name: Stop Resources
     runs-on: ubuntu-latest
     environment: ${{ github.event.inputs.account_group }}
-
-    defaults:
-      run:
-        working-directory: ${{ env.TF_WORKING_DIR }}
 
     steps:
       - name: Checkout
@@ -47,9 +46,6 @@ jobs:
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
 
-      - name: Terraform Init
-        run: terraform init
-
       - name: Scale ECS to 0
         run: |
           aws ecs update-service \
@@ -58,7 +54,12 @@ jobs:
             --desired-count 0 \
             --region ${{ env.AWS_REGION }}
 
+      - name: Terraform Init (backend)
+        working-directory: ${{ env.BACKEND_DIR }}
+        run: terraform init
+
       - name: Delete ALB
+        working-directory: ${{ env.BACKEND_DIR }}
         run: |
           terraform destroy \
             -target=module.backend.aws_lb_listener.http \
@@ -66,7 +67,12 @@ jobs:
             -target=module.backend.aws_lb.this \
             -auto-approve
 
+      - name: Terraform Init (network)
+        working-directory: ${{ env.NETWORK_DIR }}
+        run: terraform init
+
       - name: Delete Interface VPC Endpoints
+        working-directory: ${{ env.NETWORK_DIR }}
         run: |
           terraform destroy \
             -target=module.network.aws_vpc_endpoint.ecr_api \
