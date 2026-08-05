@@ -60,14 +60,6 @@ data "terraform_remote_state" "backend" {
   }
 }
 
-module "frontend" {
-  source = "../../../modules/frontend"
-
-  env                        = var.env
-  alb_dns_name               = data.terraform_remote_state.backend.outputs.alb_dns_name
-  origin_verify_header_value = data.terraform_remote_state.backend.outputs.origin_verify_header_value
-}
-
 module "monitoring" {
   source = "../../../modules/monitoring"
 
