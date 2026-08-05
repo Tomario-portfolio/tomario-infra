@@ -29,44 +29,6 @@ provider "aws" {
   }
 }
 
-# state分割（コンポーネント単位）でlogging用stateを独立させたため、リモートで参照する
-data "terraform_remote_state" "logging" {
-  backend = "s3"
-
-  config = {
-    bucket = "tomario-tfstate-nonprod"
-    key    = "dev/logging/terraform.tfstate"
-    region = "ap-northeast-1"
-  }
-}
-
-data "terraform_remote_state" "database" {
-  backend = "s3"
-
-  config = {
-    bucket = "tomario-tfstate-nonprod"
-    key    = "dev/database/terraform.tfstate"
-    region = "ap-northeast-1"
-  }
-}
-
-data "terraform_remote_state" "backend" {
-  backend = "s3"
-
-  config = {
-    bucket = "tomario-tfstate-nonprod"
-    key    = "dev/backend/terraform.tfstate"
-    region = "ap-northeast-1"
-  }
-}
-
-module "monitoring" {
-  source = "../../../modules/monitoring"
-
-  env                     = var.env
-  alarm_email             = var.alarm_email
-  alb_arn_suffix          = data.terraform_remote_state.backend.outputs.alb_arn_suffix
-  target_group_arn_suffix = data.terraform_remote_state.backend.outputs.target_group_arn_suffix
-  ecs_service_name        = data.terraform_remote_state.backend.outputs.ecs_service_name
-  db_instance_identifier  = data.terraform_remote_state.database.outputs.db_instance_identifier
-}
+# state分割（コンポーネント単位）により、logging/network/database/backend/frontend/monitoringは
+# それぞれ envs/nonprod/dev/{component}/ に独立している（各コンポーネント側のmain.tf参照）。
+# このroot stateは現時点で管理対象リソースを持たない。
