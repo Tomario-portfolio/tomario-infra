@@ -18,7 +18,13 @@ permissions:
 
 env:
   AWS_REGION: ap-northeast-1
-  TF_WORKING_DIR: envs/${{ github.event.inputs.account_group }}/${{ github.event.inputs.env }}
+  # state分割（コンポーネント単位）に伴い、依存順（network→backend→frontend→monitoring）に
+  # applyする必要がある。参照先が未applyだと参照元のplan/applyが失敗するため、
+  # このワークフロー内では並列化せず直列に実行すること
+  NETWORK_DIR: envs/${{ github.event.inputs.account_group }}/${{ github.event.inputs.env }}/network
+  BACKEND_DIR: envs/${{ github.event.inputs.account_group }}/${{ github.event.inputs.env }}/backend
+  FRONTEND_DIR: envs/${{ github.event.inputs.account_group }}/${{ github.event.inputs.env }}/frontend
+  MONITORING_DIR: envs/${{ github.event.inputs.account_group }}/${{ github.event.inputs.env }}/monitoring
   RDS_INSTANCE: tomario-${{ github.event.inputs.env }}-rds
   ECS_CLUSTER: tomario-${{ github.event.inputs.env }}-cluster
   ECS_SERVICE: tomario-${{ github.event.inputs.env }}-service
@@ -29,10 +35,6 @@ jobs:
     name: Start Resources
     runs-on: ubuntu-latest
     environment: ${{ github.event.inputs.account_group }}
-
-    defaults:
-      run:
-        working-directory: ${{ env.TF_WORKING_DIR }}
 
     steps:
       - name: Checkout
@@ -72,10 +74,38 @@ jobs:
             echo "RDS is already available, skipping wait."
           fi
 
-      - name: Terraform Init
+      - name: Terraform Init (network)
+        working-directory: ${{ env.NETWORK_DIR }}
         run: terraform init
 
-      - name: Terraform Apply
+      - name: Terraform Apply (network)
+        working-directory: ${{ env.NETWORK_DIR }}
+        run: terraform apply -auto-approve
+
+      - name: Terraform Init (backend)
+        working-directory: ${{ env.BACKEND_DIR }}
+        run: terraform init
+
+      - name: Terraform Apply (backend)
+        working-directory: ${{ env.BACKEND_DIR }}
+        run: terraform apply -auto-approve
+
+      - name: Terraform Init (frontend)
+        working-directory: ${{ env.FRONTEND_DIR }}
+        run: terraform init
+
+      - name: Terraform Apply (frontend)
+        working-directory: ${{ env.FRONTEND_DIR }}
+        # backendが再作成したALBの新しいDNS名をCloudFrontのoriginへ反映するために必要
+        run: terraform apply -auto-approve
+
+      - name: Terraform Init (monitoring)
+        working-directory: ${{ env.MONITORING_DIR }}
+        run: terraform init
+
+      - name: Terraform Apply (monitoring)
+        working-directory: ${{ env.MONITORING_DIR }}
+        # backendが再作成したALB/ECSサービスの新しい識別子をアラームのディメンションへ反映するために必要
         run: terraform apply -auto-approve
 
       - name: Scale ECS to desired count
