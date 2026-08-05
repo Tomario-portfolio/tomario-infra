@@ -6,10 +6,6 @@ terraform {
       source  = "hashicorp/aws"
       version = "~> 6.0"
     }
-    random = {
-      source  = "hashicorp/random"
-      version = "~> 3.0"
-    }
   }
 
   backend "s3" {
@@ -33,12 +29,6 @@ provider "aws" {
   }
 }
 
-# CloudFront経由のリクエストであることをALBが検証するためのシークレットヘッダー値（SEC-7、devと同じ）
-resource "random_password" "origin_verify" {
-  length  = 32
-  special = false
-}
-
 # state分割（コンポーネント単位）でlogging用stateを独立させたため、リモートで参照する
 data "terraform_remote_state" "logging" {
   backend = "s3"
@@ -46,16 +36,6 @@ data "terraform_remote_state" "logging" {
   config = {
     bucket = "tomario-tfstate-nonprod"
     key    = "staging/logging/terraform.tfstate"
-    region = "ap-northeast-1"
-  }
-}
-
-data "terraform_remote_state" "network" {
-  backend = "s3"
-
-  config = {
-    bucket = "tomario-tfstate-nonprod"
-    key    = "staging/network/terraform.tfstate"
     region = "ap-northeast-1"
   }
 }
@@ -70,32 +50,22 @@ data "terraform_remote_state" "database" {
   }
 }
 
-module "backend" {
-  source = "../../../modules/backend"
+data "terraform_remote_state" "backend" {
+  backend = "s3"
 
-  env                        = var.env
-  vpc_id                     = data.terraform_remote_state.network.outputs.vpc_id
-  public_subnet_ids          = data.terraform_remote_state.network.outputs.public_subnet_ids
-  private_subnet_ids         = data.terraform_remote_state.network.outputs.private_subnet_ids
-  db_host                    = data.terraform_remote_state.database.outputs.rds_address
-  db_secret_arn              = data.terraform_remote_state.database.outputs.master_user_secret_arn
-  rds_sg_id                  = data.terraform_remote_state.database.outputs.rds_sg_id
-  origin_verify_header_value = random_password.origin_verify.result
-  logs_bucket_id             = data.terraform_remote_state.logging.outputs.bucket_id
-  log_retention_days         = 30
-  desired_count              = 2
-  autoscaling_enabled        = true
-  autoscaling_min_capacity   = 2
-  autoscaling_max_capacity   = 4
-  autoscaling_target_cpu     = 70
+  config = {
+    bucket = "tomario-tfstate-nonprod"
+    key    = "staging/backend/terraform.tfstate"
+    region = "ap-northeast-1"
+  }
 }
 
 module "frontend" {
   source = "../../../modules/frontend"
 
   env                        = var.env
-  alb_dns_name               = module.backend.alb_dns_name
-  origin_verify_header_value = random_password.origin_verify.result
+  alb_dns_name               = data.terraform_remote_state.backend.outputs.alb_dns_name
+  origin_verify_header_value = data.terraform_remote_state.backend.outputs.origin_verify_header_value
 }
 
 module "monitoring" {
@@ -103,9 +73,9 @@ module "monitoring" {
 
   env                          = var.env
   alarm_email                  = var.alarm_email
-  alb_arn_suffix               = module.backend.alb_arn_suffix
-  target_group_arn_suffix      = module.backend.target_group_arn_suffix
-  ecs_service_name             = module.backend.ecs_service_name
+  alb_arn_suffix               = data.terraform_remote_state.backend.outputs.alb_arn_suffix
+  target_group_arn_suffix      = data.terraform_remote_state.backend.outputs.target_group_arn_suffix
+  ecs_service_name             = data.terraform_remote_state.backend.outputs.ecs_service_name
   db_instance_identifier       = data.terraform_remote_state.database.outputs.db_instance_identifier
   enable_autoscaling_dashboard = true
 }
