@@ -50,24 +50,23 @@ data "terraform_remote_state" "logging" {
   }
 }
 
-module "network" {
-  source = "../../../modules/network"
+data "terraform_remote_state" "network" {
+  backend = "s3"
 
-  env                  = var.env
-  vpc_cidr             = "10.0.0.0/16"
-  azs                  = ["ap-northeast-1a", "ap-northeast-1c"]
-  public_subnet_cidrs  = ["10.0.0.0/24", "10.0.1.0/24"]
-  private_subnet_cidrs = ["10.0.10.0/24", "10.0.11.0/24"]
-  logs_bucket_arn      = data.terraform_remote_state.logging.outputs.bucket_arn
+  config = {
+    bucket = "tomario-tfstate-nonprod"
+    key    = "dev/network/terraform.tfstate"
+    region = "ap-northeast-1"
+  }
 }
 
 module "backend" {
   source = "../../../modules/backend"
 
   env                        = var.env
-  vpc_id                     = module.network.vpc_id
-  public_subnet_ids          = module.network.public_subnet_ids
-  private_subnet_ids         = module.network.private_subnet_ids
+  vpc_id                     = data.terraform_remote_state.network.outputs.vpc_id
+  public_subnet_ids          = data.terraform_remote_state.network.outputs.public_subnet_ids
+  private_subnet_ids         = data.terraform_remote_state.network.outputs.private_subnet_ids
   db_host                    = module.database.rds_address
   db_secret_arn              = module.database.master_user_secret_arn
   rds_sg_id                  = module.database.rds_sg_id
@@ -79,8 +78,8 @@ module "database" {
   source = "../../../modules/database"
 
   env                = var.env
-  vpc_id             = module.network.vpc_id
-  private_subnet_ids = module.network.private_subnet_ids
+  vpc_id             = data.terraform_remote_state.network.outputs.vpc_id
+  private_subnet_ids = data.terraform_remote_state.network.outputs.private_subnet_ids
 }
 
 module "frontend" {
