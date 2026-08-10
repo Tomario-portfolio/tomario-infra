@@ -29,6 +29,7 @@ jobs:
       component: ${{ steps.set-matrix.outputs.component }}
       flat: ${{ steps.set-matrix.outputs.flat }}
       cd_logging: ${{ steps.set-matrix.outputs.cd_logging }}
+      cd_account: ${{ steps.set-matrix.outputs.cd_account }}
       cd_network: ${{ steps.set-matrix.outputs.cd_network }}
       cd_database: ${{ steps.set-matrix.outputs.cd_database }}
       cd_backend: ${{ steps.set-matrix.outputs.cd_backend }}
@@ -65,56 +66,84 @@ jobs:
       - name: Set Matrix
         id: set-matrix
         run: |
-          ENVS_DIR="envs/nonprod"
-          # dev/stagingはコンポーネント単位（logging/network/database/backend/frontend/monitoring）でstateを分割済み。
-          # sharedは今まで通りアカウント単位のシングルトンリソースをまとめた単一state。
-          SPLIT_ENVS="dev staging"
-          FLAT_ENVS="shared"
-          COMPONENTS="logging network database backend frontend monitoring"
+          # account_groupごとにenv構成が異なる：
+          # - nonprod: dev/stagingはコンポーネント単位でstate分割、sharedはアカウント単位の
+          #   シングルトンリソース（security/cost/ecr）をまとめた単一state（flat）
+          # - prod: shared無し。productionが9コンポーネント全てを個別state分割で持つ
+          #   （security/cost/ecrもproduction配下の独立コンポーネントとして扱う。flat無し）
+          ACCOUNT_GROUPS="nonprod prod"
+          declare -A SPLIT_ENVS_MAP=(
+            [nonprod]="dev staging"
+            [prod]="production"
+          )
+          declare -A FLAT_ENVS_MAP=(
+            [nonprod]="shared"
+            [prod]=""
+          )
+          declare -A COMPONENTS_MAP=(
+            [nonprod]="logging network database backend frontend monitoring"
+            [prod]="logging security cost ecr network database backend frontend monitoring"
+          )
 
-          if [ "${{ steps.changed.outputs.full_matrix }}" = "true" ]; then
+          build_full_matrix() {
             COMPONENT_PAIRS=""
-            for e in $SPLIT_ENVS; do
-              for c in $COMPONENTS; do
-                COMPONENT_PAIRS="$COMPONENT_PAIRS $e:$c"
+            FLAT_LIST=""
+            for ag in $ACCOUNT_GROUPS; do
+              for e in ${SPLIT_ENVS_MAP[$ag]}; do
+                for c in ${COMPONENTS_MAP[$ag]}; do
+                  COMPONENT_PAIRS="$COMPONENT_PAIRS ${ag}:${e}:${c}"
+                done
+              done
+              for e in ${FLAT_ENVS_MAP[$ag]}; do
+                FLAT_LIST="$FLAT_LIST ${ag}:${e}"
               done
             done
-            FLAT_LIST="$FLAT_ENVS"
+          }
+
+          if [ "${{ steps.changed.outputs.full_matrix }}" = "true" ]; then
+            build_full_matrix
           else
             FILES="${{ steps.changed.outputs.changed_files }}"
             COMPONENT_PAIRS=""
             FLAT_LIST=""
 
-            # envs/nonprod/{env}/{component}/** の変更 → そのenv:componentを対象に追加
-            for e in $SPLIT_ENVS; do
-              for c in $COMPONENTS; do
-                if echo "$FILES" | grep -q "^${ENVS_DIR}/${e}/${c}/"; then
-                  COMPONENT_PAIRS="$COMPONENT_PAIRS $e:$c"
+            for ag in $ACCOUNT_GROUPS; do
+              ENVS_DIR="envs/${ag}"
+
+              # envs/{account_group}/{env}/{component}/** の変更 → そのaccount_group:env:componentを対象に追加
+              for e in ${SPLIT_ENVS_MAP[$ag]}; do
+                for c in ${COMPONENTS_MAP[$ag]}; do
+                  if echo "$FILES" | grep -q "^${ENVS_DIR}/${e}/${c}/"; then
+                    COMPONENT_PAIRS="$COMPONENT_PAIRS ${ag}:${e}:${c}"
+                  fi
+                done
+              done
+
+              # envs/{account_group}/{shared}/** の変更 → そのaccount_group:envを対象に追加
+              for e in ${FLAT_ENVS_MAP[$ag]}; do
+                if echo "$FILES" | grep -q "^${ENVS_DIR}/${e}/"; then
+                  FLAT_LIST="$FLAT_LIST ${ag}:${e}"
                 fi
               done
             done
 
-            # envs/nonprod/{shared}/** の変更 → そのenvを対象に追加
-            for e in $FLAT_ENVS; do
-              if echo "$FILES" | grep -q "^${ENVS_DIR}/${e}/"; then
-                FLAT_LIST="$FLAT_LIST $e"
-              fi
-            done
-
-            # modules/{name}/** の変更
+            # modules/{name}/** の変更 → それを使う全account_group/envに波及させる
             CHANGED_MODULES=$(echo "$FILES" | sed -n 's|^modules/\([^/]*\)/.*|\1|p' | sort -u)
             for mod in $CHANGED_MODULES; do
-              # split env側は、component名 == module名なのでそのまま対応付けられる
-              if echo "$COMPONENTS" | tr ' ' '\n' | grep -qx "$mod"; then
-                for e in $SPLIT_ENVS; do
-                  COMPONENT_PAIRS="$COMPONENT_PAIRS $e:$mod"
-                done
-              fi
-              # flat env側は、そのenvのmain.tfが実際にそのmoduleを呼んでいるかで判定（従来通り）
-              for e in $FLAT_ENVS; do
-                if grep -q "module \"${mod}\"" "${ENVS_DIR}/${e}/main.tf" 2>/dev/null; then
-                  FLAT_LIST="$FLAT_LIST $e"
+              for ag in $ACCOUNT_GROUPS; do
+                ENVS_DIR="envs/${ag}"
+                # split env側は、component名 == module名なのでそのまま対応付けられる
+                if echo "${COMPONENTS_MAP[$ag]}" | tr ' ' '\n' | grep -qx "$mod"; then
+                  for e in ${SPLIT_ENVS_MAP[$ag]}; do
+                    COMPONENT_PAIRS="$COMPONENT_PAIRS ${ag}:${e}:${mod}"
+                  done
                 fi
+                # flat env側は、そのenvのmain.tfが実際にそのmoduleを呼んでいるかで判定（従来通り）
+                for e in ${FLAT_ENVS_MAP[$ag]}; do
+                  if grep -q "module \"${mod}\"" "${ENVS_DIR}/${e}/main.tf" 2>/dev/null; then
+                    FLAT_LIST="$FLAT_LIST ${ag}:${e}"
+                  fi
+                done
               done
             done
 
@@ -123,24 +152,42 @@ jobs:
 
             # 変更内容から何も特定できなかった場合は、見逃しを避けるため安全側に倒して全対象にする
             if [ -z "$(echo "${COMPONENT_PAIRS}${FLAT_LIST}" | tr -d '[:space:]')" ]; then
-              for e in $SPLIT_ENVS; do
-                for c in $COMPONENTS; do
-                  COMPONENT_PAIRS="$COMPONENT_PAIRS $e:$c"
-                done
-              done
-              FLAT_LIST="$FLAT_ENVS"
+              build_full_matrix
             fi
           fi
+
+          # 設定上は対象でも、そのディレクトリがまだ存在しない（例：envs/prod/productionを
+          # このCI変更のマージ後にまだ作っていない）場合はスキップする。CONFIGとリポジトリの
+          # 実体を分離しておくことで、CI一般化のマージとenvs/prod/production構築の順序を
+          # 気にしなくてよくなる（存在しないディレクトリへterraform initして落ちるのを防ぐ）。
+          FILTERED_PAIRS=""
+          for p in $COMPONENT_PAIRS; do
+            ag="${p%%:*}"; rest="${p#*:}"; e="${rest%%:*}"; c="${rest#*:}"
+            if [ -d "envs/${ag}/${e}/${c}" ]; then
+              FILTERED_PAIRS="$FILTERED_PAIRS $p"
+            fi
+          done
+          COMPONENT_PAIRS="$FILTERED_PAIRS"
+
+          FILTERED_FLAT=""
+          for p in $FLAT_LIST; do
+            ag="${p%%:*}"; e="${p#*:}"
+            if [ -d "envs/${ag}/${e}" ]; then
+              FILTERED_FLAT="$FILTERED_FLAT $p"
+            fi
+          done
+          FLAT_LIST="$FILTERED_FLAT"
 
           echo "Affected component pairs: $COMPONENT_PAIRS"
           echo "Affected flat envs: $FLAT_LIST"
 
           COMPONENT_JSON=$(echo "$COMPONENT_PAIRS" | tr ' ' '\n' | grep -v '^$' | \
-            awk -F: '{printf "{\"account_group\":\"nonprod\",\"env\":\"%s\",\"component\":\"%s\"}\n", $1, $2}' | \
+            awk -F: '{printf "{\"account_group\":\"%s\",\"env\":\"%s\",\"component\":\"%s\"}\n", $1, $2, $3}' | \
             jq -s -c '.')
 
-          FLAT_JSON=$(echo "$FLAT_LIST" | tr ' ' '\n' | \
-            jq -R -s -c 'split("\n") | map(select(length > 0)) | map({"account_group":"nonprod","env":.})')
+          FLAT_JSON=$(echo "$FLAT_LIST" | tr ' ' '\n' | grep -v '^$' | \
+            awk -F: '{printf "{\"account_group\":\"%s\",\"env\":\"%s\"}\n", $1, $2}' | \
+            jq -s -c '.')
 
           tier_matrix() {
             # $1: スペース区切りのcomponent名（このtierに含めるもの）
@@ -152,6 +199,7 @@ jobs:
             echo "component=$(echo "$COMPONENT_JSON" | jq -c '{"include": .}')"
             echo "flat=$(echo "$FLAT_JSON" | jq -c '{"include": .}')"
             echo "cd_logging=$(tier_matrix "logging")"
+            echo "cd_account=$(tier_matrix "security cost ecr")"
             echo "cd_network=$(tier_matrix "network")"
             echo "cd_database=$(tier_matrix "database")"
             echo "cd_backend=$(tier_matrix "backend")"
@@ -253,7 +301,9 @@ jobs:
           bash <(curl https://raw.githubusercontent.com/rhysd/actionlint/main/scripts/download-actionlint.bash)
           ./actionlint
 
-  # componentのCDは依存順（logging→network→database→backend→frontend/monitoring）に直列実行する。
+  # componentのCDは依存順（logging→account(security/cost/ecr)→network→database→backend→frontend/monitoring）に
+  # 直列実行する。account tierはprod専用（nonprodはshared/flat側で扱うためこのtierには乗らない）で、
+  # backendがecrのイメージURLを参照する都合上、network/databaseより前に置く。
   # 分割前は単一state内でTerraformが依存関係を自動解決していたが、分割後は参照先が
   # 実際にapply済みでないと参照元のplan/applyが失敗するため、順序を明示的に固定する必要がある。
   terraform-cd-logging:
@@ -287,12 +337,43 @@ jobs:
         env:
           TF_VAR_alarm_email: ${{ secrets.ALARM_EMAIL }}
 
-  terraform-cd-network:
-    name: Terraform CD / ${{ matrix.account_group }}/${{ matrix.env }}/network
+  terraform-cd-account:
+    name: Terraform CD / ${{ matrix.account_group }}/${{ matrix.env }}/${{ matrix.component }}
     needs: [set-matrix, terraform-cd-logging]
     if: |
       always() &&
       (needs.terraform-cd-logging.result == 'success' || needs.terraform-cd-logging.result == 'skipped') &&
+      needs.set-matrix.outputs.cd_account != '{"include":[]}' &&
+      github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+    runs-on: ubuntu-latest
+    environment: ${{ matrix.account_group }}
+    strategy:
+      matrix: ${{ fromJson(needs.set-matrix.outputs.cd_account) }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+      - name: Terraform Init
+        working-directory: envs/${{ matrix.account_group }}/${{ matrix.env }}/${{ matrix.component }}
+        run: terraform init
+      - name: Terraform Apply
+        working-directory: envs/${{ matrix.account_group }}/${{ matrix.env }}/${{ matrix.component }}
+        run: terraform apply -auto-approve
+        env:
+          TF_VAR_alarm_email: ${{ secrets.ALARM_EMAIL }}
+
+  terraform-cd-network:
+    name: Terraform CD / ${{ matrix.account_group }}/${{ matrix.env }}/network
+    needs: [set-matrix, terraform-cd-account]
+    if: |
+      always() &&
+      (needs.terraform-cd-account.result == 'success' || needs.terraform-cd-account.result == 'skipped') &&
       needs.set-matrix.outputs.cd_network != '{"include":[]}' &&
       github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
     runs-on: ubuntu-latest
