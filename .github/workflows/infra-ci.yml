@@ -28,6 +28,8 @@ jobs:
     outputs:
       component: ${{ steps.set-matrix.outputs.component }}
       flat: ${{ steps.set-matrix.outputs.flat }}
+      ci_nonprod: ${{ steps.set-matrix.outputs.ci_nonprod }}
+      ci_prod: ${{ steps.set-matrix.outputs.ci_prod }}
       cd_logging: ${{ steps.set-matrix.outputs.cd_logging }}
       cd_account: ${{ steps.set-matrix.outputs.cd_account }}
       cd_network: ${{ steps.set-matrix.outputs.cd_network }}
@@ -195,9 +197,18 @@ jobs:
               '{"include": [.[] | select(.component as $c | ($comps | split(" ")) | index($c))]}'
           }
 
+          account_group_matrix() {
+            # $1: account_group名。CI(plan)をaccount_groupごとに別ジョブへ分離するために使う
+            # （prodは読み取り専用ロール・Environment紐付け無しでRequired reviewersの承認を経ずにplanできるようにするため）
+            echo "$COMPONENT_JSON" | jq -c --arg ag "$1" \
+              '{"include": [.[] | select(.account_group == $ag)]}'
+          }
+
           {
             echo "component=$(echo "$COMPONENT_JSON" | jq -c '{"include": .}')"
             echo "flat=$(echo "$FLAT_JSON" | jq -c '{"include": .}')"
+            echo "ci_nonprod=$(account_group_matrix "nonprod")"
+            echo "ci_prod=$(account_group_matrix "prod")"
             echo "cd_logging=$(tier_matrix "logging")"
             echo "cd_account=$(tier_matrix "security cost ecr")"
             echo "cd_network=$(tier_matrix "network")"
@@ -209,12 +220,12 @@ jobs:
   terraform-ci-component:
     name: Terraform CI / ${{ matrix.account_group }}/${{ matrix.env }}/${{ matrix.component }}
     needs: set-matrix
-    if: needs.set-matrix.outputs.component != '{"include":[]}'
+    if: needs.set-matrix.outputs.ci_nonprod != '{"include":[]}'
     runs-on: ubuntu-latest
     environment: ${{ matrix.account_group }}
     strategy:
       fail-fast: false
-      matrix: ${{ fromJson(needs.set-matrix.outputs.component) }}
+      matrix: ${{ fromJson(needs.set-matrix.outputs.ci_nonprod) }}
 
     steps:
       - name: Checkout
@@ -249,6 +260,50 @@ jobs:
         run: terraform plan -no-color
         env:
           TF_VAR_alarm_email: ${{ secrets.ALARM_EMAIL }}
+
+  # prod専用のCI(plan)。terraform-ci-componentと違いGitHub Environmentを指定しないため、
+  # Required reviewersの承認ゲートを経由せずPR作成・push時点でplanを実行できる。
+  # その代わりAWS_ROLE_ARN_PROD_READONLY（リポジトリレベルのシークレット、bootstrap-prodの
+  # github_actions_readonly_role_arn出力）はReadOnlyAccessのみの権限で、apply系操作はできない。
+  terraform-ci-component-prod-readonly:
+    name: Terraform CI (read-only) / ${{ matrix.account_group }}/${{ matrix.env }}/${{ matrix.component }}
+    needs: set-matrix
+    if: needs.set-matrix.outputs.ci_prod != '{"include":[]}'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJson(needs.set-matrix.outputs.ci_prod) }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN_PROD_READONLY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+
+      - name: Terraform Format Check
+        run: terraform fmt -check -recursive
+
+      - name: Terraform Init
+        working-directory: envs/${{ matrix.account_group }}/${{ matrix.env }}/${{ matrix.component }}
+        run: terraform init
+
+      - name: Terraform Validate
+        working-directory: envs/${{ matrix.account_group }}/${{ matrix.env }}/${{ matrix.component }}
+        run: terraform validate
+
+      - name: Terraform Plan
+        working-directory: envs/${{ matrix.account_group }}/${{ matrix.env }}/${{ matrix.component }}
+        continue-on-error: ${{ matrix.component == 'frontend' }}
+        run: terraform plan -no-color
+        env:
+          TF_VAR_alarm_email: ${{ secrets.ALARM_EMAIL_PROD_READONLY }}
 
   terraform-ci-flat:
     name: Terraform CI / ${{ matrix.account_group }}/${{ matrix.env }}
