@@ -60,11 +60,17 @@ jobs:
 
       - name: Delete ALB
         working-directory: ${{ env.BACKEND_DIR }}
+        # aws_ecs_service.thisはload_balancerブロックでaws_lb_target_group.thisに依存しているため、
+        # target groupを-targetで破棄すると連鎖的に一緒に破棄される（aws_lb_listener_ruleも同様）。
+        # 明示的にtargetへ加えているのはこの連鎖を隠さず可視化するためで、動作は変わらない
+        # （cost-start.ymlがbackend全体をterraform applyし直すため、次回起動時に作り直される）
         run: |
           terraform destroy \
+            -target=module.backend.aws_lb_listener_rule.allow_from_cloudfront \
             -target=module.backend.aws_lb_listener.http \
             -target=module.backend.aws_lb_target_group.this \
             -target=module.backend.aws_lb.this \
+            -target=module.backend.aws_ecs_service.this \
             -auto-approve
 
       - name: Terraform Init (network)
