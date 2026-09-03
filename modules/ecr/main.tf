@@ -11,6 +11,25 @@ resource "aws_ecr_repository" "this" {
   }
 }
 
+resource "aws_ecr_repository_policy" "cross_account_pull" {
+  count      = length(var.cross_account_pull_role_arns) > 0 ? 1 : 0
+  repository = aws_ecr_repository.this.name
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Sid       = "CrossAccountPromotePull"
+      Effect    = "Allow"
+      Principal = { AWS = var.cross_account_pull_role_arns }
+      Action = [
+        "ecr:GetDownloadUrlForLayer",
+        "ecr:BatchGetImage",
+        "ecr:BatchCheckLayerAvailability",
+      ]
+    }]
+  })
+}
+
 resource "aws_ecr_lifecycle_policy" "this" {
   repository = aws_ecr_repository.this.name
 
