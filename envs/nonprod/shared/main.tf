@@ -64,4 +64,8 @@ module "ecr" {
 
   env  = var.env
   name = "tomario-app"
+
+  # productionへのpromoteフロー（staging検証済みイメージをdigest指定でpull→re-tag→prod ECRへpush）で、
+  # github-actions-app-deploy-prodロールがこのリポジトリをpull専用で読めるようにする（push権限は含めない）
+  cross_account_pull_role_arns = ["arn:aws:iam::236782813946:role/github-actions-app-deploy-prod"]
 }
