@@ -278,6 +278,29 @@ resource "aws_iam_role_policy" "github_actions_app" {
           "codedeploy:RegisterApplicationRevision",
         ]
         Resource = "*"
+      },
+      {
+        # フロントエンド静的ファイルのデプロイ（deploy.ymlのpromote-to-productionジョブ用）
+        Effect = "Allow"
+        Action = [
+          "s3:ListBucket",
+          "s3:PutObject",
+          "s3:DeleteObject",
+        ]
+        Resource = [
+          "arn:aws:s3:::tomario-production-frontend",
+          "arn:aws:s3:::tomario-production-frontend/*",
+        ]
+      },
+      {
+        # デプロイ後のCloudFrontキャッシュ無効化
+        Effect = "Allow"
+        Action = [
+          "cloudfront:CreateInvalidation",
+        ]
+        Resource = [
+          "arn:aws:cloudfront::236782813946:distribution/E16RCKYF5065BQ",
+        ]
       }
     ]
   })
