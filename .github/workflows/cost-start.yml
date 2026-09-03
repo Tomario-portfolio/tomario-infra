@@ -112,6 +112,7 @@ jobs:
         run: |
           case "${{ github.event.inputs.env }}" in
             staging) DESIRED_COUNT=2 ;;
+            production) DESIRED_COUNT=2 ;;
             *) DESIRED_COUNT=1 ;;
           esac
           aws ecs update-service \
