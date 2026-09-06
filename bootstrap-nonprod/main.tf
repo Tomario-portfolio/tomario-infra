@@ -117,6 +117,8 @@ resource "aws_iam_role_policy" "github_actions" {
           # セキュリティ
           "cloudtrail:*",
           "guardduty:*",
+          "config:*",
+          "securityhub:*",
           # コスト管理
           "budgets:*",
           "ce:*",
