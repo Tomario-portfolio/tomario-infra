@@ -29,6 +29,20 @@ provider "aws" {
   }
 }
 
+# CloudFront用WAF Web ACL（CLOUDFRONTスコープ）はus-east-1に作成する必要がある
+provider "aws" {
+  alias  = "us_east_1"
+  region = "us-east-1"
+
+  default_tags {
+    tags = {
+      Project     = "tomario"
+      Environment = var.env
+      ManagedBy   = "terraform"
+    }
+  }
+}
+
 data "terraform_remote_state" "backend" {
   backend = "s3"
 
@@ -39,10 +53,25 @@ data "terraform_remote_state" "backend" {
   }
 }
 
+# CloudFront用WAF。面接期間のみ enable_waf = true（SEC-5、security-stack-runbook.md）
+module "waf_cloudfront" {
+  count  = var.enable_waf ? 1 : 0
+  source = "../../../../modules/waf"
+
+  providers = {
+    aws = aws.us_east_1
+  }
+
+  env         = var.env
+  scope       = "CLOUDFRONT"
+  name_suffix = "cloudfront"
+}
+
 module "frontend" {
   source = "../../../../modules/frontend"
 
   env                        = var.env
   alb_dns_name               = data.terraform_remote_state.backend.outputs.alb_dns_name
   origin_verify_header_value = data.terraform_remote_state.backend.outputs.origin_verify_header_value
+  web_acl_arn                = var.enable_waf ? module.waf_cloudfront[0].web_acl_arn : null
 }
