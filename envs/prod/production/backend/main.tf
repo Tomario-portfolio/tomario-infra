@@ -103,3 +103,19 @@ module "backend" {
   autoscaling_max_capacity = 4
   autoscaling_target_cpu   = 70
 }
+
+# ALB用WAF。面接期間のみ enable_waf = true（SEC-5、security-stack-runbook.md）
+module "waf_alb" {
+  count  = var.enable_waf ? 1 : 0
+  source = "../../../../modules/waf"
+
+  env         = var.env
+  scope       = "REGIONAL"
+  name_suffix = "alb"
+}
+
+resource "aws_wafv2_web_acl_association" "alb" {
+  count        = var.enable_waf ? 1 : 0
+  resource_arn = module.backend.alb_arn
+  web_acl_arn  = module.waf_alb[0].web_acl_arn
+}
