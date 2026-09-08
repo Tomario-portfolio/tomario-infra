@@ -12,3 +12,9 @@ variable "origin_verify_header_value" {
   sensitive   = true
   description = "ALBへのオリジンリクエストに付与するシークレットヘッダー値（SEC-7: ALB直アクセス拒否の検証用）"
 }
+
+variable "web_acl_arn" {
+  type        = string
+  default     = null
+  description = "ディストリビューションにアタッチするWAF Web ACLのARN（CLOUDFRONTスコープ）。nullならWAFなし"
+}

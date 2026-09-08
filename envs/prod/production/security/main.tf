@@ -45,7 +45,8 @@ module "security" {
   aws_region = var.aws_region
 
   # 面接期間のみtrue、それ以外はfalse（security-environment-design.md、2026-08-03決定）。
-  # 常時起動コスト（~$3〜5/月）に見合わないため、必要な時だけ手動でtrueに切り替える運用
+  # 常時起動コスト（~$3〜5/月）に見合わないため、必要な時だけ手動でtrueに切り替える運用。
+  # WAF（backend/frontendのenable_waf）とセットで切り替える。手順は docs/security-stack-runbook.md
   enable_security_hub = false
   enable_config       = false
 

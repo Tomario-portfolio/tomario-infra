@@ -23,6 +23,9 @@ resource "aws_cloudfront_distribution" "this" {
   default_root_object = "index.html"
   price_class         = "PriceClass_All"
 
+  # WAF Web ACL（CLOUDFRONTスコープ）。var.web_acl_arnがnullならWAFなし（SEC-5）
+  web_acl_id = var.web_acl_arn
+
   # S3オリジン（静的ファイル）
   origin {
     domain_name              = aws_s3_bucket.frontend.bucket_regional_domain_name
