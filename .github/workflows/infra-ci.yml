@@ -20,6 +20,10 @@ permissions:
 
 env:
   AWS_REGION: ap-northeast-1
+  # セキュリティスタック（WAF + Config + Security Hub）の現在の状態。security-stack.yml が更新する。
+  # これを渡さないと、無関係なマージの apply でフラグが未指定＝false になりスタックが消えてしまう。
+  # prod の security / backend / frontend コンポーネントだけがこの変数を宣言している（他は Terraform が無視）。
+  TF_VAR_enable_security_stack: ${{ vars.SECURITY_STACK_ENABLED || 'false' }}
 
 jobs:
   set-matrix:
