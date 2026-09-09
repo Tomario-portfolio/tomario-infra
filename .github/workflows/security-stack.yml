@@ -1,0 +1,105 @@
+name: Security Stack Toggle
+
+# WAF（CloudFront用・ALB用）+ AWS Config + Security Hub をまとめてON/OFFする。
+# cost-stop.yml / cost-start.yml とは独立したワークフロー（日次サイクルには乗らない）。
+# 前提・確認手順は docs/security-stack-runbook.md
+#
+# 前提:
+#  - 実行前に prod を cost-start しておくこと（ALB 実在が必要）。ALB が無ければ即失敗する
+#  - secrets.GH_PAT_VARIABLES（Variables 書き込み可の PAT）とリポジトリ変数 SECURITY_STACK_ENABLED
+#
+# 仕組み:
+#  - enable_security_stack フラグを prod の security / backend / frontend コンポーネントが読む
+#  - 現在の状態はリポジトリ変数 SECURITY_STACK_ENABLED に保存し、infra-ci.yml / cost-start.yml /
+#    cost-stop.yml もこれを参照する（通常の apply でフラグが false に戻る＝スタックが消える、を防ぐ）
+#  - この workflow は apply 成功後にその変数を書き換える
+
+on:
+  workflow_dispatch:
+    inputs:
+      action:
+        description: "セキュリティスタック（WAF + AWS Config + Security Hub）"
+        type: choice
+        options:
+          - enable
+          - disable
+        required: true
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  AWS_REGION: ap-northeast-1
+
+jobs:
+  apply:
+    name: Terraform apply (prod / ${{ inputs.action }})
+    runs-on: ubuntu-latest
+    # prod Environment の Required reviewers を経由する（承認しないと apply されない）
+    environment: prod
+    env:
+      TF_VAR_enable_security_stack: ${{ inputs.action == 'enable' && 'true' || 'false' }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # PATが無い/権限不足のまま apply すると、スタックは切り替わったのに
+      # SECURITY_STACK_ENABLED が古いまま → 次の infra-ci マージで巻き戻る、という半端な状態になる。
+      # apply の前に必ず弾く。
+      - name: Verify variable-write token
+        env:
+          GH_TOKEN: ${{ secrets.GH_PAT_VARIABLES }}
+        run: |
+          if [ -z "${GH_TOKEN:-}" ]; then
+            echo "::error::secrets.GH_PAT_VARIABLES が未設定です（docs/security-stack-runbook.md）"
+            exit 1
+          fi
+          gh variable list --repo "${{ github.repository }}" >/dev/null
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+
+      # backend / frontend の apply は prod 起動中（ALB 実在）が前提。
+      # cost-stop 中に走らせると ALB を作り直す＝prod を意図せず起動してしまうため、先に弾く。
+      - name: Require prod to be cost-started
+        run: |
+          if ! aws elbv2 describe-load-balancers \
+            --names "tomario-production-alb" --region "${AWS_REGION}" >/dev/null 2>&1; then
+            echo "::error::prod ALB が見つかりません。先に cost-start（account_group=prod, env=production）してから再実行してください（docs/security-stack-runbook.md）"
+            exit 1
+          fi
+
+      # security / backend / frontend の順に apply。
+      # - security  : Config recorder + S3 + IAM、Security Hub + CIS標準
+      # - backend   : ALB用 Web ACL + association
+      # - frontend  : CloudFront用 Web ACL（us-east-1）→ distribution の web_acl_id にセット
+      - name: Terraform apply (security, backend, frontend)
+        env:
+          TF_VAR_alarm_email: ${{ secrets.ALARM_EMAIL }}
+        run: |
+          set -euo pipefail
+          for component in security backend frontend; do
+            dir="envs/prod/production/${component}"
+            echo "::group::terraform apply — ${component}"
+            terraform -chdir="${dir}" init -input=false
+            terraform -chdir="${dir}" apply -input=false -auto-approve -no-color
+            echo "::endgroup::"
+          done
+
+      # apply が全て成功したときだけ、現在の状態をリポジトリ変数へ反映する。
+      # GITHUB_TOKEN では Actions 変数を更新できないため、fine-grained PAT（Variables: Read and write）を
+      # secrets.GH_PAT_VARIABLES に登録しておくこと（docs/security-stack-runbook.md）。
+      - name: Persist SECURITY_STACK_ENABLED
+        env:
+          GH_TOKEN: ${{ secrets.GH_PAT_VARIABLES }}
+        run: |
+          gh variable set SECURITY_STACK_ENABLED \
+            --repo "${{ github.repository }}" \
+            --body "${{ inputs.action == 'enable' && 'true' || 'false' }}"
