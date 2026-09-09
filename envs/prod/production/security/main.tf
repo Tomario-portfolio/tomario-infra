@@ -44,11 +44,12 @@ module "security" {
   env        = var.env
   aws_region = var.aws_region
 
-  # 面接期間のみtrue、それ以外はfalse（security-environment-design.md、2026-08-03決定）。
-  # 常時起動コスト（~$3〜5/月）に見合わないため、必要な時だけ手動でtrueに切り替える運用。
-  # WAF（backend/frontendのenable_waf）とセットで切り替える。手順は docs/security-stack-runbook.md
-  enable_security_hub = false
-  enable_config       = false
+  # セキュリティスタック（WAF + Config + Security Hub）を一括ON/OFFするフラグ。
+  # 値は security-stack.yml（workflow_dispatch）が SECURITY_STACK_ENABLED 変数経由で制御する。
+  # 常時起動コストに見合わないため、必要な期間だけ有効化する運用（security-environment-design.md、2026-08-03決定）。
+  # 手順は docs/security-stack-runbook.md
+  enable_security_hub = var.enable_security_stack
+  enable_config       = var.enable_security_stack
 
   cloudtrail_bucket_name = data.terraform_remote_state.logging.outputs.bucket_id
 }

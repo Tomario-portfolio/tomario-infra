@@ -26,6 +26,10 @@ env:
   ECS_CLUSTER: tomario-${{ github.event.inputs.env }}-cluster
   ECS_SERVICE: tomario-${{ github.event.inputs.env }}-service
   TF_VAR_alarm_email: ${{ secrets.ALARM_EMAIL }}
+  # セキュリティスタック（WAF + Config + Security Hub）の現在の状態。security-stack.yml が更新する。
+  # cost-stop は -target destroy のみ行うため WAF Web ACL 本体は残す想定だが、
+  # -target 指定時の plan 評価でフラグを一致させておくために渡す。
+  TF_VAR_enable_security_stack: ${{ vars.SECURITY_STACK_ENABLED || 'false' }}
 
 jobs:
   cost-stop:

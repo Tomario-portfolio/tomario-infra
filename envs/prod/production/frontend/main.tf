@@ -53,9 +53,9 @@ data "terraform_remote_state" "backend" {
   }
 }
 
-# CloudFront用WAF。面接期間のみ enable_waf = true（SEC-5、security-stack-runbook.md）
+# CloudFront用WAF（CLOUDFRONTスコープ）。セキュリティスタック有効時のみ作成（SEC-5、security-stack-runbook.md）
 module "waf_cloudfront" {
-  count  = var.enable_waf ? 1 : 0
+  count  = var.enable_security_stack ? 1 : 0
   source = "../../../../modules/waf"
 
   providers = {
@@ -73,5 +73,5 @@ module "frontend" {
   env                        = var.env
   alb_dns_name               = data.terraform_remote_state.backend.outputs.alb_dns_name
   origin_verify_header_value = data.terraform_remote_state.backend.outputs.origin_verify_header_value
-  web_acl_arn                = var.enable_waf ? module.waf_cloudfront[0].web_acl_arn : null
+  web_acl_arn                = var.enable_security_stack ? module.waf_cloudfront[0].web_acl_arn : null
 }

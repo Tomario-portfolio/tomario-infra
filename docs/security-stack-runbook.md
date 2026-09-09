@@ -1,52 +1,71 @@
 # セキュリティスタック ON/OFF 手順（production）
 
-WAF・Security Hub・AWS Config は常時稼働コストに見合わないため、**面接活動期間の頭で一度 ON にし、活動終了時（またはポートフォリオを畳む時）に OFF に戻す**運用とする。日次の `cost-stop.yml` / `cost-start.yml` サイクルには含めない。
+**WAF（CloudFront用・ALB用）+ AWS Config + Security Hub** を、必要な期間だけまとめて有効化する。
+`cost-stop.yml` / `cost-start.yml` の日次サイクルとは**独立**。
 
 - Security Hub は無効化の 90 日後に findings が削除される
 - AWS Config は連続した構成履歴が価値なので、日次で止めると意味が薄れる
 
-## 対象フラグ（すべて default false）
+## 仕組み
 
-| コンポーネント | ファイル | 変数 | 作るもの |
-|---|---|---|---|
-| backend | `envs/prod/production/backend/` | `enable_waf` | ALB用 Web ACL（REGIONAL）＋ ALB への association |
-| frontend | `envs/prod/production/frontend/` | `enable_waf` | CloudFront用 Web ACL（CLOUDFRONT / us-east-1）＋ distribution へアタッチ |
-| security | `envs/prod/production/security/` | `enable_security_hub` / `enable_config` | Security Hub + CIS 標準、AWS Config recorder + S3 + IAM ロール |
+| 要素 | 役割 |
+|---|---|
+| `enable_security_stack`（bool 変数） | prod の `security` / `backend` / `frontend` コンポーネントが宣言。true で各リソースを作成 |
+| リポジトリ変数 `SECURITY_STACK_ENABLED` | 現在の状態を保存する唯一の場所。`security-stack.yml` が書き換える |
+| `.github/workflows/security-stack.yml` | ワンクリック ON/OFF（`workflow_dispatch`、入力 `enable` / `disable`）。**実行前に prod を cost-start しておくこと**（ALB 実在チェックあり、無ければ即失敗） |
+| `infra-ci.yml` / `cost-start.yml` / `cost-stop.yml` の `TF_VAR_enable_security_stack` | どの apply でも `SECURITY_STACK_ENABLED` を参照 → フラグが false に戻ってスタックが消えるのを防ぐ |
 
-WAF の中身（`modules/waf`）：AWSマネージドルール3種（CommonRuleSet / KnownBadInputs / AmazonIpReputationList）＋ レートベースルール（5分/2000req/IP）＋ CloudWatch Logs 出力。
+有効時に作られるもの（`modules/waf`: AWSマネージドルール3種〈CommonRuleSet / KnownBadInputs / AmazonIpReputationList〉＋ レートベースルール〈5分/2000req/IP〉＋ CloudWatch Logs 出力）:
 
-## 前提
+| コンポーネント | リソース |
+|---|---|
+| `security` | AWS Config recorder + S3 + IAM、Security Hub + CIS v1.4.0 標準 |
+| `frontend` | CloudFront用 Web ACL（us-east-1）→ distribution の `web_acl_id` |
+| `backend` | ALB用 Web ACL + ALB への association |
 
-- **先に `cost-start` で production を起動しておく**。ALB が存在しない状態で `enable_waf = true` にすると association が失敗する。
-- terraform ロール（`github-actions-terraform-prod`）に `wafv2:*` / `config:*` / `securityhub:*` が必要。`bootstrap-prod` に含めてあるので、権限追加後は `bootstrap-prod` を一度 apply しておくこと（nonprod で試す場合は `bootstrap-nonprod` も同様）。
+## cost-start / cost-stop との関係
 
-## ON 手順
+- **有効化・無効化は prod 起動中に行う**（`security-stack.yml` が ALB 実在をチェックして弾く）
+- ON のまま `cost-stop` → ALB は `-target` destroy で消え、AWS 側で WAF association も自動解除。WAF Web ACL 本体は state に残る
+- ON のまま `cost-start` → backend の full apply で ALB と association が一緒に再作成される（`cost-start.yml` が `SECURITY_STACK_ENABLED` を渡すため）
+- `security-stack.yml` と `cost-start.yml` / `cost-stop.yml` を**同時に走らせない**（`production/backend` の state ロックが衝突する）
 
-1. `cost-start` で production 起動（ALB / ECS / RDS）
-2. 次の 3 ファイルのフラグを `true` に変更する PR を作成
-   - `envs/prod/production/backend/main.tf` … `module "backend"` 呼び出しの `enable_waf`（変数経由なら `terraform.tfvars` か CI の `-var`）→ 実際は `envs/prod/production/backend/` の `enable_waf` を true に
-   - `envs/prod/production/frontend/` の `enable_waf` → true
-   - `envs/prod/production/security/main.tf` の `enable_security_hub` / `enable_config` → true
-3. PR をマージ → `infra-ci.yml` が backend / frontend / security の 3 コンポーネントを apply
-   - apply 自体は数分。CloudFront への Web ACL 紐付けは伝播に 5〜15 分
-   - Config 有効化直後、既存リソースの初回記録（configuration item 課金 $0.003/件、production 規模で合計 $1〜2 程度）が走る
-4. 反映確認
-   - `aws wafv2 list-web-acls --scope REGIONAL --region ap-northeast-1`
-   - `aws wafv2 list-web-acls --scope CLOUDFRONT --region us-east-1`
-   - CloudFront ディストリビューションの `WebACLId` が設定されているか
-   - `aws configservice describe-configuration-recorder-status --region ap-northeast-1`
-   - `aws securityhub get-enabled-standards --region ap-northeast-1`
-   - CloudFront 経由で会員登録→予約→キャンセルが WAF 誤検知でブロックされないこと（誤検知が出たら該当マネージドルールを一時 count モードに）
+## 一度だけの準備
 
-## OFF 手順
+1. **`bootstrap-prod` を apply**
+   terraform ロール（`github-actions-terraform-prod`）に `config:*` / `securityhub:*` を追加済み（PR #72）。未 apply だと `security` の apply が AccessDenied になる。
+2. **fine-grained PAT を作成し `GH_PAT_VARIABLES` シークレットに登録**
+   `GITHUB_TOKEN` では Actions 変数を更新できないため。権限は当該リポジトリの **Variables: Read and write** のみ。
+3. **リポジトリ変数 `SECURITY_STACK_ENABLED` を作成**（初期値 `false`）
+   Settings → Secrets and variables → Actions → Variables。
 
-1. 上記 3 ファイルのフラグを `false` に戻す PR をマージ
-2. `infra-ci.yml` の apply で以下が削除される
+## ON 手順（ワンクリック）
+
+1. **先に `cost-start`（account_group=prod, env=production）で production を起動しておく**
+2. Actions → **Security Stack Toggle** → Run workflow → `action = enable`
+3. `apply` ジョブが **prod Environment の承認待ち**で停止 → 承認
+4. apply（`security` → `backend` → `frontend` の順）が走り、成功後に `SECURITY_STACK_ENABLED = true` が保存される
+   - CloudFront への Web ACL 紐付けは伝播に 5〜15 分
+   - Config 有効化直後、既存リソースの初回記録（configuration item 課金 $0.003/件、production 規模で合計 $1〜2 程度）
+5. 確認
+   ```
+   aws wafv2 list-web-acls --scope REGIONAL  --region ap-northeast-1 --profile tomario-prod
+   aws wafv2 list-web-acls --scope CLOUDFRONT --region us-east-1     --profile tomario-prod
+   aws configservice describe-configuration-recorder-status --region ap-northeast-1 --profile tomario-prod
+   aws securityhub get-enabled-standards --region ap-northeast-1 --profile tomario-prod
+   ```
+   CloudFront 経由で会員登録→予約→キャンセルが WAF 誤検知でブロックされないこと（誤検知が出たら該当マネージドルールを一時 `count` に）
+
+## OFF 手順（ワンクリック）
+
+1. **prod が cost-start 済みであること**（disable も backend/frontend の apply を伴うため）
+2. Actions → **Security Stack Toggle** → Run workflow → `action = disable`
+3. 承認 → apply で以下が削除される
    - WAF Web ACL ×2、association、WAFログ用ロググループ
    - Security Hub account / 標準サブスクリプション
    - Config recorder / delivery channel / S3 バケット（`force_destroy = true`）/ IAM ロール
    - CloudFront の `web_acl_id` は `null` に戻る（distribution 更新、伝播あり）
-3. `cost-stop` を通常どおり実行（ALB / ECS / RDS）
+4. 成功後に `SECURITY_STACK_ENABLED = false` が保存される
 
 ## コスト目安（ON の期間のみ）
 

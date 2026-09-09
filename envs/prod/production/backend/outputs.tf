@@ -14,10 +14,6 @@ output "target_group_arn" {
   value = module.backend.target_group_arn
 }
 
-output "alb_arn" {
-  value = module.backend.alb_arn
-}
-
 output "alb_arn_suffix" {
   value = module.backend.alb_arn_suffix
 }
