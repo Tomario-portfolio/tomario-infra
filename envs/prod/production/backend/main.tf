@@ -104,9 +104,11 @@ module "backend" {
   autoscaling_target_cpu   = 70
 }
 
-# ALB用WAF。面接期間のみ enable_waf = true（SEC-5、security-stack-runbook.md）
+# ALB用WAF（REGIONALスコープ）。セキュリティスタック有効時のみ作成（SEC-5、security-stack-runbook.md）。
+# security-stack.yml / cost-start.yml は prod 起動中（ALB 実在）を前提に apply するため、
+# association は module.backend.alb_arn を素直に参照する（ALB→association の順に単一 apply で作られる）。
 module "waf_alb" {
-  count  = var.enable_waf ? 1 : 0
+  count  = var.enable_security_stack ? 1 : 0
   source = "../../../../modules/waf"
 
   env         = var.env
@@ -115,7 +117,7 @@ module "waf_alb" {
 }
 
 resource "aws_wafv2_web_acl_association" "alb" {
-  count        = var.enable_waf ? 1 : 0
+  count        = var.enable_security_stack ? 1 : 0
   resource_arn = module.backend.alb_arn
   web_acl_arn  = module.waf_alb[0].web_acl_arn
 }
