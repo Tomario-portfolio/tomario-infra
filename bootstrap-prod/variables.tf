@@ -24,3 +24,8 @@ variable "github_environment" {
   type        = string
   default     = "prod"
 }
+
+variable "local_readonly_principal_arn" {
+  description = "github_actions_readonlyロールをAssumeRoleできるローカル運用者のIAMプリンシパルARN（例: arn:aws:iam::<nonprodアカウントID>:user/xxx）。prodのread-only確認用"
+  type        = string
+}
