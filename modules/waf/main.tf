@@ -12,7 +12,7 @@ locals {
 
 resource "aws_wafv2_web_acl" "this" {
   name        = local.name
-  description = "tomario ${var.env} ${var.name_suffix} 向けWeb ACL"
+  description = "tomario ${var.env} ${var.name_suffix} Web ACL"
   scope       = var.scope
 
   # マッチしなかったリクエストは通す（ブロックはルールで明示的に行う）
