@@ -176,21 +176,32 @@ resource "aws_iam_role" "github_actions_readonly" {
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
-    Statement = [{
-      Effect = "Allow"
-      Principal = {
-        Federated = aws_iam_openid_connect_provider.github_actions.arn
-      }
-      Action = "sts:AssumeRoleWithWebIdentity"
-      Condition = {
-        StringLike = {
-          "token.actions.githubusercontent.com:sub" = "repo:${var.github_repo}:*"
+    Statement = [
+      {
+        Effect = "Allow"
+        Principal = {
+          Federated = aws_iam_openid_connect_provider.github_actions.arn
         }
-        StringEquals = {
-          "token.actions.githubusercontent.com:aud" = "sts.amazonaws.com"
+        Action = "sts:AssumeRoleWithWebIdentity"
+        Condition = {
+          StringLike = {
+            "token.actions.githubusercontent.com:sub" = "repo:${var.github_repo}:*"
+          }
+          StringEquals = {
+            "token.actions.githubusercontent.com:aud" = "sts.amazonaws.com"
+          }
         }
+      },
+      # ローカル運用者（Claude Code / aws-mcp含む）がprodのread-only確認をするための追加口。
+      # 本ロールはReadOnlyAccessのみアタッチ済みでapply系は一切できないため、権限自体は広げない。
+      {
+        Effect = "Allow"
+        Principal = {
+          AWS = var.local_readonly_principal_arn
+        }
+        Action = "sts:AssumeRole"
       }
-    }]
+    ]
   })
 }
 
