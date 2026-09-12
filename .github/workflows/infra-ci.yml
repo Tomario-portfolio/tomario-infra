@@ -133,20 +133,24 @@ jobs:
               done
             done
 
-            # modules/{name}/** の変更 → それを使う全account_group/envに波及させる
+            # modules/{name}/** の変更 → それを使う全account_group/envに波及させる。
+            # component名 == module名とは限らない（例：backend/frontendはmodules/wafを
+            # module "waf_alb" / "waf_cloudfront" というラベルで呼ぶ）ため、ブロックラベルや
+            # component名との一致ではなく、main.tfが実際に「source = ".../modules/<mod>"」を
+            # 参照しているかどうかで判定する（split env・flat env共通）
             CHANGED_MODULES=$(echo "$FILES" | sed -n 's|^modules/\([^/]*\)/.*|\1|p' | sort -u)
             for mod in $CHANGED_MODULES; do
               for ag in $ACCOUNT_GROUPS; do
                 ENVS_DIR="envs/${ag}"
-                # split env側は、component名 == module名なのでそのまま対応付けられる
-                if echo "${COMPONENTS_MAP[$ag]}" | tr ' ' '\n' | grep -qx "$mod"; then
-                  for e in ${SPLIT_ENVS_MAP[$ag]}; do
-                    COMPONENT_PAIRS="$COMPONENT_PAIRS ${ag}:${e}:${mod}"
+                for e in ${SPLIT_ENVS_MAP[$ag]}; do
+                  for c in ${COMPONENTS_MAP[$ag]}; do
+                    if grep -q "modules/${mod}\"" "${ENVS_DIR}/${e}/${c}/main.tf" 2>/dev/null; then
+                      COMPONENT_PAIRS="$COMPONENT_PAIRS ${ag}:${e}:${c}"
+                    fi
                   done
-                fi
-                # flat env側は、そのenvのmain.tfが実際にそのmoduleを呼んでいるかで判定（従来通り）
+                done
                 for e in ${FLAT_ENVS_MAP[$ag]}; do
-                  if grep -q "module \"${mod}\"" "${ENVS_DIR}/${e}/main.tf" 2>/dev/null; then
+                  if grep -q "modules/${mod}\"" "${ENVS_DIR}/${e}/main.tf" 2>/dev/null; then
                     FLAT_LIST="$FLAT_LIST ${ag}:${e}"
                   fi
                 done
