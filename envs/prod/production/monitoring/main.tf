@@ -49,6 +49,16 @@ data "terraform_remote_state" "backend" {
   }
 }
 
+data "terraform_remote_state" "frontend" {
+  backend = "s3"
+
+  config = {
+    bucket = "tomario-tfstate-prod"
+    key    = "production/frontend/terraform.tfstate"
+    region = "ap-northeast-1"
+  }
+}
+
 module "monitoring" {
   source = "../../../../modules/monitoring"
 
@@ -59,4 +69,6 @@ module "monitoring" {
   ecs_service_name             = data.terraform_remote_state.backend.outputs.ecs_service_name
   db_instance_identifier       = data.terraform_remote_state.database.outputs.db_instance_identifier
   enable_autoscaling_dashboard = true
+  enable_waf_alarm             = var.enable_security_stack
+  waf_cloudfront_web_acl_name  = data.terraform_remote_state.frontend.outputs.waf_cloudfront_web_acl_name
 }

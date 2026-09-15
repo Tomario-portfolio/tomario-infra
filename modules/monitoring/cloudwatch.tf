@@ -56,6 +56,33 @@ resource "aws_cloudwatch_metric_alarm" "ecs_cpu" {
 #   }
 # }
 
+resource "aws_cloudwatch_metric_alarm" "waf_blocked_requests" {
+  count               = var.enable_waf_alarm ? 1 : 0
+  alarm_name          = "tomario-${var.env}-waf-blocked"
+  alarm_description   = "WAF(CloudFront)のBlockedRequestsが閾値を超えています"
+  comparison_operator = "GreaterThanThreshold"
+  evaluation_periods  = 1
+  metric_name         = "BlockedRequests"
+  namespace           = "AWS/WAFV2"
+  period              = 300
+  statistic           = "Sum"
+  threshold           = 10
+  treat_missing_data  = "notBreaching"
+
+  dimensions = {
+    WebACL = var.waf_cloudfront_web_acl_name
+    Region = "CloudFront"
+    Rule   = "ALL"
+  }
+
+  alarm_actions = [aws_sns_topic.alarm.arn]
+  ok_actions    = [aws_sns_topic.alarm.arn]
+
+  tags = {
+    Name = "tomario-${var.env}-waf-blocked"
+  }
+}
+
 resource "aws_cloudwatch_metric_alarm" "rds_cpu" {
   alarm_name          = "tomario-${var.env}-rds-cpu"
   alarm_description   = "RDSのCPU使用率が80%以上になっています"

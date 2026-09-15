@@ -34,6 +34,18 @@ variable "enable_autoscaling_dashboard" {
   default     = false
 }
 
+variable "enable_waf_alarm" {
+  description = "WAF(CloudFront)のBlockedRequestsアラームを作成するか（productionのみ、enable_security_stackと連動）"
+  type        = bool
+  default     = false
+}
+
+variable "waf_cloudfront_web_acl_name" {
+  description = "CloudFront用WAF Web ACL名（enable_waf_alarm=trueの時のみ使用）"
+  type        = string
+  default     = null
+}
+
 # variable "asg_name" {（旧・EC2用）
 #   description = "Auto ScalingグループのASG名（CloudWatchアラームのディメンション用）"
 #   type        = string
