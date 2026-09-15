@@ -62,6 +62,8 @@ resource "aws_ecs_task_definition" "this" {
       # 初回作成時のみ使う仮イメージ（bootstrap_image）。実イメージはCI/CDがSHAタグで直接デプロイする
       image     = var.bootstrap_image
       essential = true
+      # tomario-appはCookieセッション・ローカルディスク書き込み無しの単一Flaskアプリのため有効化可能
+      readonlyRootFilesystem = true
 
       portMappings = [
         {
