@@ -4,13 +4,22 @@ on:
   workflow_dispatch:
     inputs:
       account_group:
-        description: "対象account_group（nonprod/prod）"
+        description: "対象account_group"
         required: true
         default: "nonprod"
+        type: choice
+        options:
+          - nonprod
+          - prod
       env:
-        description: "対象env（dev/staging/production）"
+        description: "対象env"
         required: true
         default: "dev"
+        type: choice
+        options:
+          - dev
+          - staging
+          - production
 
 permissions:
   id-token: write
