@@ -79,8 +79,9 @@ resource "aws_cloudwatch_metric_alarm" "waf_blocked_requests" {
     Rule   = "ALL"
   }
 
-  alarm_actions = [aws_sns_topic.alarm.arn]
-  ok_actions    = [aws_sns_topic.alarm.arn]
+  # alarm_actionsは同一リージョン(us-east-1)のSNSトピックである必要がある
+  alarm_actions = [aws_sns_topic.waf_alarm[0].arn]
+  ok_actions    = [aws_sns_topic.waf_alarm[0].arn]
 
   tags = {
     Name = "tomario-${var.env}-waf-blocked"
