@@ -69,9 +69,10 @@ resource "aws_cloudwatch_metric_alarm" "waf_blocked_requests" {
   threshold           = 10
   treat_missing_data  = "notBreaching"
 
+  # CLOUDFRONTスコープのWebACLはRegionディメンションを持たない（REGIONALスコープ用の
+  # 手順書サンプルコマンドをそのまま踏襲したことによる誤り。実機でlist-metricsを確認して判明）
   dimensions = {
     WebACL = var.waf_cloudfront_web_acl_name
-    Region = "CloudFront"
     Rule   = "ALL"
   }
 
