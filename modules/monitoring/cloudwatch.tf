@@ -57,7 +57,10 @@ resource "aws_cloudwatch_metric_alarm" "ecs_cpu" {
 # }
 
 resource "aws_cloudwatch_metric_alarm" "waf_blocked_requests" {
-  count               = var.enable_waf_alarm ? 1 : 0
+  count = var.enable_waf_alarm ? 1 : 0
+  # WAF(CloudFront)のBlockedRequestsメトリクスはus-east-1にしか存在しないため、
+  # CloudWatchアラームも同じリージョンに作る必要がある（他のアラームはap-northeast-1のまま）
+  provider            = aws.us_east_1
   alarm_name          = "tomario-${var.env}-waf-blocked"
   alarm_description   = "WAF(CloudFront)のBlockedRequestsが閾値を超えています"
   comparison_operator = "GreaterThanThreshold"

@@ -29,6 +29,20 @@ provider "aws" {
   }
 }
 
+# WAF(CloudFront)のBlockedRequestsメトリクスを見るアラームはus-east-1に作る必要がある
+provider "aws" {
+  alias  = "us_east_1"
+  region = "us-east-1"
+
+  default_tags {
+    tags = {
+      Project     = "tomario"
+      Environment = var.env
+      ManagedBy   = "terraform"
+    }
+  }
+}
+
 data "terraform_remote_state" "database" {
   backend = "s3"
 
@@ -61,6 +75,11 @@ data "terraform_remote_state" "frontend" {
 
 module "monitoring" {
   source = "../../../../modules/monitoring"
+
+  providers = {
+    aws           = aws
+    aws.us_east_1 = aws.us_east_1
+  }
 
   env                          = var.env
   alarm_email                  = var.alarm_email
