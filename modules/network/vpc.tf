@@ -8,6 +8,16 @@ resource "aws_vpc" "this" {
   }
 }
 
+# VPC作成時にAWSが自動生成するdefault SGは、素の状態だとingress/egressが空でなく
+# 誰も参照していなくても存在するだけでSecurity Hub findingになるため、明示的に空にする
+resource "aws_default_security_group" "this" {
+  vpc_id = aws_vpc.this.id
+
+  tags = {
+    Name = "tomario-${var.env}-default-sg"
+  }
+}
+
 resource "aws_subnet" "public" {
   count = length(var.azs)
 
