@@ -53,33 +53,19 @@ data "aws_iam_policy_document" "config_bucket" {
   }
 }
 
-resource "aws_iam_role" "config" {
-  count              = var.enable_config ? 1 : 0
-  name               = "tomario-${var.env}-config-role"
-  assume_role_policy = data.aws_iam_policy_document.config_assume.json
-}
-
-data "aws_iam_policy_document" "config_assume" {
-  statement {
-    effect  = "Allow"
-    actions = ["sts:AssumeRole"]
-    principals {
-      type        = "Service"
-      identifiers = ["config.amazonaws.com"]
-    }
-  }
-}
-
-resource "aws_iam_role_policy_attachment" "config" {
-  count      = var.enable_config ? 1 : 0
-  role       = aws_iam_role.config[0].name
-  policy_arn = "arn:aws:iam::aws:policy/service-role/AWS_ConfigRole"
+# Security Hub finding「AWS Config should be enabled and use the
+# service-linked role for resource recording」対応。カスタムIAMロールでは
+# 誤って編集・削除されてもAWSが止めてくれないため、専用のサービスリンク
+# ロールに切り替える。有効化トグル（enable_config）とは切り離し、
+# 存在しているだけなら無料なので常時作成しておく。
+resource "aws_iam_service_linked_role" "config" {
+  aws_service_name = "config.amazonaws.com"
 }
 
 resource "aws_config_configuration_recorder" "main" {
   count    = var.enable_config ? 1 : 0
   name     = "tomario-${var.env}-config"
-  role_arn = aws_iam_role.config[0].arn
+  role_arn = aws_iam_service_linked_role.config.arn
 
   recording_group {
     all_supported                 = true
