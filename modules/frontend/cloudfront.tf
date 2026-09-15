@@ -17,6 +17,17 @@ resource "aws_cloudfront_origin_access_control" "frontend" {
   signing_protocol                  = "sigv4"
 }
 
+# SPAのクライアントサイドルーティング対応。custom_error_response(403→200)による
+# エラーコード変換だと、WAFがブロックして生成した403も巻き込んで200にすり替えてしまうため、
+# リクエスト時点でのURI書き換えに変更した（拡張子の無いパス=SPAのルートとみなしindex.htmlへ）
+resource "aws_cloudfront_function" "spa_routing" {
+  name    = "tomario-${var.env}-spa-routing"
+  runtime = "cloudfront-js-2.0"
+  comment = "拡張子の無いパス（SPAのクライアントサイドルート）をindex.htmlへ書き換える"
+  publish = true
+  code    = file("${path.module}/functions/spa-routing.js")
+}
+
 resource "aws_cloudfront_distribution" "this" {
   enabled             = true
   is_ipv6_enabled     = true
@@ -60,6 +71,11 @@ resource "aws_cloudfront_distribution" "this" {
     cache_policy_id        = local.cache_policy_optimized
     viewer_protocol_policy = "redirect-to-https"
     compress               = true
+
+    function_association {
+      event_type   = "viewer-request"
+      function_arn = aws_cloudfront_function.spa_routing.arn
+    }
   }
 
   # /api/* → ALB（キャッシュ無効）
@@ -74,14 +90,8 @@ resource "aws_cloudfront_distribution" "this" {
     compress                 = true
   }
 
-  # SPAのルーティング対応（404 → index.html）
-  custom_error_response {
-    error_code            = 403
-    response_code         = 200
-    response_page_path    = "/index.html"
-    error_caching_min_ttl = 0
-  }
-
+  # 404はCloudFront Function(spa_routing)で基本的に発生しなくなるが、想定外のケースの
+  # セーフティネットとして残す。403は残さない（WAFブロックの403まで200にすり替わってしまうため）
   custom_error_response {
     error_code            = 404
     response_code         = 200
