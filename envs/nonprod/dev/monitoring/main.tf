@@ -52,6 +52,13 @@ data "terraform_remote_state" "backend" {
 module "monitoring" {
   source = "../../../../modules/monitoring"
 
+  # enable_waf_alarm=false(デフォルト)のため実際には使われないが、モジュールが
+  # configuration_aliasesでus-east-1プロバイダを要求するため渡す必要がある
+  providers = {
+    aws           = aws
+    aws.us_east_1 = aws
+  }
+
   env                     = var.env
   alarm_email             = var.alarm_email
   alb_arn_suffix          = data.terraform_remote_state.backend.outputs.alb_arn_suffix
