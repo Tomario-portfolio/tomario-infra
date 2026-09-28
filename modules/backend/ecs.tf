@@ -98,6 +98,11 @@ resource "aws_ecs_task_definition" "this" {
           "awslogs-group"         = aws_cloudwatch_log_group.ecs.name
           "awslogs-region"        = "ap-northeast-1"
           "awslogs-stream-prefix" = "ecs"
+          # 複数行にまたがるスタックトレース（Traceback/File/例外メッセージ等）を1つのログイベントにまとめる。
+          # アクセスログ行（IPで始まる）かエラーログの先頭行（[日時 で始まる）以外は直前の行の続きとみなす。
+          # (M-04: ログ追跡性試験で、multiline-pattern未設定によりスタックトレースが1行=1イベントに
+          # 分断されると判明。同時刻に複数エラーが起きると切り分け不能だった)
+          "awslogs-multiline-pattern" = "^(\\d+\\.\\d+\\.\\d+\\.\\d+ - - \\[|\\[\\d{4}-\\d{2}-\\d{2})"
         }
       }
     }
