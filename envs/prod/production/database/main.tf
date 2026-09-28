@@ -6,6 +6,10 @@ terraform {
       source  = "hashicorp/aws"
       version = "~> 6.0"
     }
+    archive = {
+      source  = "hashicorp/archive"
+      version = "~> 2.0"
+    }
   }
 
   backend "s3" {
@@ -48,4 +52,11 @@ module "database" {
 
   # multi_az/instance_classはデフォルト値のまま（Multi-AZ無効・db.t3.micro）。
   # Multi-AZは検討中のためオフだが、変数化済みなので必要な時にtrueへ変更してapplyするだけで有効化できる
+}
+
+# RDSの7日強制起動制約対策（REL-4/COST-4/SUS-3）
+module "rds_autostop" {
+  source = "../../../../modules/rds-autostop"
+
+  env = var.env
 }
