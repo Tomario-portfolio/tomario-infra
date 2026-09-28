@@ -37,6 +37,10 @@ resource "aws_db_instance" "this" {
   backup_window           = "18:00-19:00"
   maintenance_window      = "sun:19:00-sun:20:00"
 
+  # クエリ単位の性能分析（無料枠：7日保持）
+  performance_insights_enabled          = true
+  performance_insights_retention_period = 7
+
   tags = {
     Name = "tomario-${var.env}-rds"
   }
