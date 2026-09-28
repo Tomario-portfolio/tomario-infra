@@ -6,6 +6,10 @@ terraform {
       source  = "hashicorp/aws"
       version = "~> 6.0"
     }
+    archive = {
+      source  = "hashicorp/archive"
+      version = "~> 2.0"
+    }
   }
 
   backend "s3" {
@@ -45,4 +49,11 @@ module "database" {
   env                = var.env
   vpc_id             = data.terraform_remote_state.network.outputs.vpc_id
   private_subnet_ids = data.terraform_remote_state.network.outputs.private_subnet_ids
+}
+
+# RDSの7日強制起動制約対策（REL-4/COST-4/SUS-3）
+module "rds_autostop" {
+  source = "../../../../modules/rds-autostop"
+
+  env = var.env
 }

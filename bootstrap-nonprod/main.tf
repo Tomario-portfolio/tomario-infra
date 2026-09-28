@@ -114,6 +114,9 @@ resource "aws_iam_role_policy" "github_actions" {
           # 監視
           "cloudwatch:*",
           "logs:*",
+          # RDS自動停止Lambda（RDSの7日強制起動制約への対策、REL-4/COST-4/SUS-3）
+          "lambda:*",
+          "events:*",
           # セキュリティ
           "cloudtrail:*",
           "guardduty:*",
