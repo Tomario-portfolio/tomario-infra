@@ -13,7 +13,7 @@ resource "aws_cloudwatch_dashboard" "autoscaling" {
         height = 6
         properties = {
           metrics = [
-            ["AWS/ECS", "RunningTaskCount", "ClusterName", "tomario-${var.env}-cluster", "ServiceName", var.ecs_service_name]
+            ["ECS/ContainerInsights", "RunningTaskCount", "ClusterName", "tomario-${var.env}-cluster", "ServiceName", var.ecs_service_name]
           ]
           period = 60
           stat   = "Average"

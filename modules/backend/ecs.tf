@@ -37,6 +37,12 @@ resource "aws_cloudwatch_log_group" "ecs" {
 resource "aws_ecs_cluster" "this" {
   name = "tomario-${var.env}-cluster"
 
+  # RunningTaskCount等のECS/ContainerInsightsメトリクスを有効化（M-06/P-07: ダッシュボードのタスク数可視化のため）
+  setting {
+    name  = "containerInsights"
+    value = "enabled"
+  }
+
   tags = {
     Name = "tomario-${var.env}-cluster"
   }
