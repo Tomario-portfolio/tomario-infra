@@ -89,7 +89,5 @@ module "monitoring" {
   db_instance_identifier       = data.terraform_remote_state.database.outputs.db_instance_identifier
   enable_autoscaling_dashboard = true
   enable_waf_alarm             = var.enable_security_stack
-  # enable_security_stack=falseの時、frontend側のoutputはnullになりTerraformがremote stateから
-  # キーごと落とすため、直接参照だと"Unsupported attribute"で落ちる。try()でnullにフォールバックする
-  waf_cloudfront_web_acl_name = try(data.terraform_remote_state.frontend.outputs.waf_cloudfront_web_acl_name, null)
+  waf_cloudfront_web_acl_name  = data.terraform_remote_state.frontend.outputs.waf_cloudfront_web_acl_name
 }
