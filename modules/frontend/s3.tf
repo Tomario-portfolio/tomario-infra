@@ -30,6 +30,17 @@ resource "aws_s3_bucket_public_access_block" "frontend" {
   restrict_public_buckets = true
 }
 
+# 保存データの暗号化（SSE-S3）。AWSのデフォルト暗号化に任せず、方式を明示する
+resource "aws_s3_bucket_server_side_encryption_configuration" "frontend" {
+  bucket = aws_s3_bucket.frontend.id
+
+  rule {
+    apply_server_side_encryption_by_default {
+      sse_algorithm = "AES256"
+    }
+  }
+}
+
 data "aws_iam_policy_document" "frontend_bucket_policy" {
   statement {
     sid    = "AllowCloudFrontServicePrincipalReadOnly"
