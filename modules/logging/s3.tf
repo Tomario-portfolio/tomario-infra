@@ -22,6 +22,18 @@ resource "aws_s3_bucket_public_access_block" "logs" {
   restrict_public_buckets = true
 }
 
+# 保存データの暗号化（SSE-S3）。AWSのデフォルト暗号化に任せず、方式を明示する。
+# ALBアクセスログの配信先はSSE-S3のみ対応（SSE-KMSは不可）のため、KMSにはしない
+resource "aws_s3_bucket_server_side_encryption_configuration" "logs" {
+  bucket = aws_s3_bucket.logs.id
+
+  rule {
+    apply_server_side_encryption_by_default {
+      sse_algorithm = "AES256"
+    }
+  }
+}
+
 resource "aws_s3_bucket_lifecycle_configuration" "logs" {
   bucket = aws_s3_bucket.logs.id
 
