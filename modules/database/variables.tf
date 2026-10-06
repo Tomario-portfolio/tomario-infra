@@ -25,6 +25,12 @@ variable "multi_az" {
   default = false
 }
 
+variable "skip_final_snapshot" {
+  type        = bool
+  default     = true
+  description = "destroy時に最終スナップショットを残さない場合はtrue。実データを持つ環境ではfalseにする"
+}
+
 variable "instance_class" {
   type    = string
   default = "db.t3.micro"
