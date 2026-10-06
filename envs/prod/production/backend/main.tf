@@ -39,8 +39,7 @@ resource "random_password" "origin_verify" {
   special = false
 }
 
-# Flask SECRET_KEY。modules/backendのデフォルト値("dev-secret-key-change-in-prod")は
-# プレースホルダーのためproductionでは使わず、ランダム値を生成して渡す
+# Flask SECRET_KEY（セッションcookieの署名鍵）。ランダム値を生成して渡す
 # （aws_secretsmanager_secret_versionはignore_changes = [secret_string]のため初回apply時の値が
 # そのまま使われ続ける。事後のローテーションはAWS側で別途行う運用）
 resource "random_password" "flask_secret_key" {
