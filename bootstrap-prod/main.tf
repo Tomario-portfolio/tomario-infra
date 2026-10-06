@@ -108,10 +108,6 @@ resource "aws_iam_role_policy" "github_actions" {
           "s3:*",
           # CDN
           "cloudfront:*",
-          # DNS
-          "route53:*",
-          # 証明書（CloudFront・ALBのHTTPS化で使用）
-          "acm:*",
           # 監視
           "cloudwatch:*",
           "logs:*",
