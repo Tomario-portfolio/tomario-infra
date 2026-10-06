@@ -50,6 +50,10 @@ module "database" {
   vpc_id             = data.terraform_remote_state.network.outputs.vpc_id
   private_subnet_ids = data.terraform_remote_state.network.outputs.private_subnet_ids
 
+  # ストレージ枯渇で書き込めなくなるのを防ぐため、productionのみ100GBまで自動拡張する
+  # （課金は実際に拡張された容量分のみ）
+  max_allocated_storage = 100
+
   # multi_az/instance_classはデフォルト値のまま（Multi-AZ無効・db.t3.micro）。
   # Multi-AZは検討中のためオフだが、変数化済みなので必要な時にtrueへ変更してapplyするだけで有効化できる
 }
