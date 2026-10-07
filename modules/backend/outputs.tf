@@ -30,6 +30,11 @@ output "ecs_service_name" {
   value = aws_ecs_service.this.name
 }
 
+output "flask_secret_key_arn" {
+  description = "Flask SECRET_KEYのシークレットARN（modules/secret-rotationでローテーション対象として使う）"
+  value       = aws_secretsmanager_secret.flask_secret_key.arn
+}
+
 # output "ec2_sg_id" {（旧）
 #   value = aws_security_group.ec2.id
 # }

@@ -92,3 +92,11 @@ module "backend" {
   logs_bucket_id             = data.terraform_remote_state.logging.outputs.bucket_id
   secret_key                 = random_password.flask_secret_key.result
 }
+
+# Flask SECRET_KEYの自動ローテーション（SEC-8、90日ごと）
+module "secret_rotation" {
+  source = "../../../../modules/secret-rotation"
+
+  env        = var.env
+  secret_arn = module.backend.flask_secret_key_arn
+}

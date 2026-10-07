@@ -120,3 +120,11 @@ resource "aws_wafv2_web_acl_association" "alb" {
   resource_arn = module.backend.alb_arn
   web_acl_arn  = module.waf_alb[0].web_acl_arn
 }
+
+# Flask SECRET_KEYの自動ローテーション（SEC-8、90日ごと）
+module "secret_rotation" {
+  source = "../../../../modules/secret-rotation"
+
+  env        = var.env
+  secret_arn = module.backend.flask_secret_key_arn
+}
