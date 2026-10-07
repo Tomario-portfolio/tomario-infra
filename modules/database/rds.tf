@@ -19,8 +19,10 @@ resource "aws_db_instance" "this" {
   manage_master_user_password = true
 
   allocated_storage = 20
-  storage_type      = "gp3"
-  storage_encrypted = true
+  # ストレージ自動拡張の上限（GB）。0は自動拡張なし
+  max_allocated_storage = var.max_allocated_storage
+  storage_type          = "gp3"
+  storage_encrypted     = true
 
   port                   = 3306
   db_subnet_group_name   = aws_db_subnet_group.this.name

@@ -33,3 +33,9 @@ variable "instance_class" {
 # variable "ecs_sg_id" {（循環依存のため削除。RDS SGへの許可はbackendモジュールで管理）
 #   type = string
 # }
+
+variable "max_allocated_storage" {
+  type        = number
+  default     = 0
+  description = "ストレージ自動拡張の上限（GB）。0は自動拡張なし（allocated_storageの20GB固定）"
+}
