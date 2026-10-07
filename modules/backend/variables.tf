@@ -32,8 +32,9 @@ variable "logs_bucket_id" {
 }
 
 variable "secret_key" {
-  type    = string
-  default = "dev-secret-key-change-in-prod"
+  type        = string
+  sensitive   = true
+  description = "Flask SECRET_KEY（セッションcookieの署名鍵）。呼び出し側でrandom_passwordにより生成して渡す（渡し忘れを防ぐためデフォルト値は持たない）"
 }
 
 variable "origin_verify_header_value" {
