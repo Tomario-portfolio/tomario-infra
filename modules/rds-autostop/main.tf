@@ -35,6 +35,7 @@ resource "aws_iam_role_policy" "this" {
         Effect = "Allow"
         Action = [
           "rds:DescribeDBInstances",
+          "rds:DescribeEvents",
           "rds:StopDBInstance",
         ]
         Resource = "*"
@@ -97,9 +98,10 @@ resource "aws_lambda_function" "this" {
 
 resource "aws_cloudwatch_event_rule" "daily" {
   name        = "tomario-${var.env}-rds-autostop-schedule"
-  description = "RDSの7日強制起動制約対策：毎日チェックし、availableなのにECS非稼働なら再stopする（REL-4/COST-4/SUS-3）"
-  # UTC 20:00 = JST 05:00。cost-start/stopの通常利用時間帯を避けた時間に実行
-  schedule_expression = "cron(0 20 * * ? *)"
+  description = "RDSの7日強制起動制約対策：1時間ごとにチェックし、7日制約で自動起動されECS非稼働なら再stopする（REL-4/COST-4/SUS-3）"
+  # 1日1回（JST 05:00）だと、実行直後に自動起動された場合に最大約24時間RDSが稼働し続けたため（2026-10-06に発生）、
+  # 1時間ごとに変更。cost-start中の誤停止は、Lambda側で自動起動のRDSイベントを条件にすることで防ぐ
+  schedule_expression = "rate(1 hour)"
 
   tags = {
     Name = "tomario-${var.env}-rds-autostop-schedule"

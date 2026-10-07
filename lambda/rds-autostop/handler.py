@@ -2,12 +2,14 @@
 RDS自動停止Lambda（REL-4 / COST-4 / SUS-3）
 
 AWSはstopped状態のRDSインスタンスを最大7日で自動的に再起動(available化)する仕様がある。
-このLambdaはEventBridgeで毎日1回起動し、RDSがavailableなのに対応するECSサービスが
-稼働していない（＝cost-startされたわけではなく、7日制約による意図しない自動復旧の可能性が高い）
-場合、RDSを再度停止してタイマーをリセットする。
+このLambdaはEventBridgeで1時間ごとに起動し、以下をすべて満たす場合にRDSを再度停止してタイマーをリセットする。
 
-正規のcost-start（RDS + ECS + ALBをまとめて起動）の場合はECSサービスもactiveになっているため、
-誤って正規稼働中の環境を止めてしまうことはない。
+- RDSがavailable
+- 直近FORCED_START_LOOKBACK_MINUTES以内に、7日制約による自動起動のRDSイベントが記録されている
+- 対応するECSサービスが稼働していない
+
+自動起動のイベントを条件に加えているのは、cost-startの途中（RDSは起動済みだがECSのdesiredCountを戻す前）に
+実行された場合に、正規の起動を誤って止めないため。cost-startや手動の起動では自動起動のイベントは記録されない。
 """
 import os
 
@@ -15,6 +17,20 @@ import boto3
 
 rds = boto3.client("rds")
 ecs = boto3.client("ecs")
+
+# 7日制約による自動起動時にRDSが記録するイベントメッセージの一部
+FORCED_START_MESSAGE = "exceeding the maximum allowed time being stopped"
+# 1時間ごとの実行で取りこぼさないよう、実行間隔より長めに遡る
+FORCED_START_LOOKBACK_MINUTES = 180
+
+
+def forced_start_recorded(rds_id):
+    resp = rds.describe_events(
+        SourceIdentifier=rds_id,
+        SourceType="db-instance",
+        Duration=FORCED_START_LOOKBACK_MINUTES,
+    )
+    return any(FORCED_START_MESSAGE in e.get("Message", "") for e in resp.get("Events", []))
 
 
 def handler(event, context):
@@ -33,6 +49,10 @@ def handler(event, context):
         print(f"{rds_id}: status={status}, nothing to do")
         return
 
+    if not forced_start_recorded(rds_id):
+        print(f"{rds_id}: available but no 7-day forced auto-restart event - started by cost-start or manually, leaving as is")
+        return
+
     ecs_active = False
     try:
         ecs_resp = ecs.describe_services(cluster=ecs_cluster, services=[ecs_service])
@@ -46,5 +66,5 @@ def handler(event, context):
         print(f"{rds_id}: available and ECS active - legitimate cost-start, leaving as is")
         return
 
-    print(f"{rds_id}: available but ECS not active - likely 7-day forced auto-restart, stopping again")
+    print(f"{rds_id}: 7-day forced auto-restart detected and ECS not active, stopping again")
     rds.stop_db_instance(DBInstanceIdentifier=rds_id)
