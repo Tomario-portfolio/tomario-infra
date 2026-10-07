@@ -100,8 +100,6 @@ resource "aws_iam_role_policy" "github_actions" {
           # コンテナ
           "ecr:*",
           "ecs:*",
-          # デプロイ（Blue/Greenデプロイ用）
-          "codedeploy:*",
           # WAF
           "wafv2:*",
           # データベース
@@ -110,10 +108,6 @@ resource "aws_iam_role_policy" "github_actions" {
           "s3:*",
           # CDN
           "cloudfront:*",
-          # DNS
-          "route53:*",
-          # 証明書（CloudFront・ALBのHTTPS化で使用）
-          "acm:*",
           # 監視
           "cloudwatch:*",
           "logs:*",
@@ -286,12 +280,6 @@ resource "aws_iam_role_policy" "github_actions_app" {
           "ecs:DescribeTasks",
           # タスク定義にIAMロールを渡す権限
           "iam:PassRole",
-          # Blue/Greenデプロイ（CodeDeploy）のデプロイ実行・監視のみ。アプリ作成/設定変更はTerraform側（infra）で行う
-          "codedeploy:CreateDeployment",
-          "codedeploy:GetDeployment",
-          "codedeploy:GetDeploymentConfig",
-          "codedeploy:GetApplicationRevision",
-          "codedeploy:RegisterApplicationRevision",
         ]
         Resource = "*"
       },
