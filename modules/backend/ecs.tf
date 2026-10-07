@@ -20,8 +20,10 @@ resource "aws_secretsmanager_secret_version" "flask_secret_key" {
   secret_id     = aws_secretsmanager_secret.flask_secret_key.id
   secret_string = var.secret_key
 
+  # 初期値の登録のみTerraformで行い、以降の値の入れ替えはmodules/secret-rotationの自動ローテーションに任せる。
+  # ローテーションでこの版のラベルがAWSCURRENT→AWSPREVIOUSへ移るため、version_stagesも差分として扱わない
   lifecycle {
-    ignore_changes = [secret_string]
+    ignore_changes = [secret_string, version_stages]
   }
 }
 

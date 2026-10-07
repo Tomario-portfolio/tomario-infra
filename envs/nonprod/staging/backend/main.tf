@@ -98,3 +98,11 @@ module "backend" {
   autoscaling_max_capacity   = 4
   autoscaling_target_cpu     = 70
 }
+
+# Flask SECRET_KEYの自動ローテーション（SEC-8、90日ごと）
+module "secret_rotation" {
+  source = "../../../../modules/secret-rotation"
+
+  env        = var.env
+  secret_arn = module.backend.flask_secret_key_arn
+}
