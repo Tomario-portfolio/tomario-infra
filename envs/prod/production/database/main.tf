@@ -56,6 +56,9 @@ module "database" {
 
   # multi_az/instance_classはデフォルト値のまま（Multi-AZ無効・db.t3.micro）。
   # Multi-AZは検討中のためオフだが、変数化済みなので必要な時にtrueへ変更してapplyするだけで有効化できる
+
+  # 意図しないdestroyでデータを失わないよう、productionのみ最終スナップショットを残す
+  skip_final_snapshot = false
 }
 
 # RDSの7日強制起動制約対策（REL-4/COST-4/SUS-3）

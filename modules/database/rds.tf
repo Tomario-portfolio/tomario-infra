@@ -33,7 +33,10 @@ resource "aws_db_instance" "this" {
   allow_major_version_upgrade = true
   auto_minor_version_upgrade  = true
   deletion_protection         = false
-  skip_final_snapshot         = true
+  skip_final_snapshot         = var.skip_final_snapshot
+  # destroy時に残す最終スナップショット名。同名のスナップショットが既にあるとdestroyが失敗するため、
+  # 一度destroyして再作成した後に再びdestroyする場合は、先に古い最終スナップショットを削除しておく
+  final_snapshot_identifier = var.skip_final_snapshot ? null : "tomario-${var.env}-rds-final"
 
   backup_retention_period = 7
   backup_window           = "18:00-19:00"
