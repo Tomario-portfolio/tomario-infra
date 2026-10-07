@@ -89,7 +89,11 @@ resource "aws_ecs_task_definition" "this" {
       secrets = [
         { name = "DB_USER", valueFrom = "${var.db_secret_arn}:username::" },
         { name = "DB_PASSWORD", valueFrom = "${var.db_secret_arn}:password::" },
-        { name = "SECRET_KEY", valueFrom = aws_secretsmanager_secret.flask_secret_key.arn }
+        { name = "SECRET_KEY", valueFrom = aws_secretsmanager_secret.flask_secret_key.arn },
+        # 1つ前の鍵（AWSPREVIOUS）。アプリはSECRET_KEY_FALLBACKSに入れ、ローテーション前に発行された
+        # セッションcookieも受け付ける（modules/secret-rotation）。AWSPREVIOUSは1回目のローテーション後に
+        # 作られるため、存在しない状態でこの定義のタスクを起動すると取得に失敗する点に注意
+        { name = "SECRET_KEY_PREVIOUS", valueFrom = "${aws_secretsmanager_secret.flask_secret_key.arn}::AWSPREVIOUS:" }
       ]
 
       logConfiguration = {
