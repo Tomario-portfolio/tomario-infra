@@ -1,7 +1,7 @@
 # tomario-infra
 
 ホテル予約システム「Tomario」の AWS インフラを管理する Terraform リポジトリです。
-dev（開発）・staging（負荷試験・障害試験）・production（本番）の3環境をAWSアカウント分離し、staging で検証した構成をそのまま production に適用しています。
+dev（開発）・staging（負荷試験・障害試験）・production（本番）の3環境を、nonprod（dev/staging）とprod（production）の2つのAWSアカウントに分離し、staging で検証した構成をそのまま production に適用しています。
 
 > **はじめに読む場合** — 本番構成は [`envs/prod/production/`](envs/prod/production/)、主要な実装は [`modules/backend/`](modules/backend/)（ECS Fargate + ALB）と [`modules/network/`](modules/network/)（VPC Endpoint）を参照してください。
 
@@ -17,20 +17,29 @@ dev（開発）・staging（負荷試験・障害試験）・production（本番
 │   └── prod/
 │       └── production/ … 本番環境（network〜logging + security/cost/ecr をフルセットで同居）
 ├── modules/
-│   ├── network/     … VPC・Subnet・IGW・VPC Endpoint・VPC Flow Logs
-│   ├── backend/     … ECS Fargate・ALB・IAM・Secrets Manager
-│   ├── database/    … RDS（MySQL）
-│   ├── frontend/    … CloudFront・S3（OAC）
-│   ├── security/    … GuardDuty・CloudTrail・AWS Config・Security Hub
-│   ├── monitoring/  … CloudWatch Alarms・SNS
-│   ├── cost/        … AWS Budgets・Cost Anomaly Detection
-│   ├── ecr/         … ECR
-│   └── logging/     … ログ集約用S3バケット
+│   ├── network/         … VPC・Subnet・IGW・VPC Endpoint・VPC Flow Logs
+│   ├── backend/         … ECS Fargate・ALB・Auto Scaling・IAM・Secrets Manager
+│   ├── database/        … RDS（MySQL）
+│   ├── frontend/        … CloudFront・S3（OAC）
+│   ├── security/        … GuardDuty・CloudTrail・AWS Config・Security Hub
+│   ├── waf/             … WAF（CloudFront用・ALB用 Web ACL、WAFログ）
+│   ├── monitoring/      … CloudWatch Alarms・SNS・ダッシュボード
+│   ├── logging/         … ログ集約用S3バケット
+│   ├── cost/            … AWS Budgets・Cost Anomaly Detection
+│   ├── ecr/             … ECR
+│   ├── rds-autostop/    … 停止中のRDSが7日で自動起動したときに再停止するLambda
+│   └── secret-rotation/ … Flaskのセッション署名鍵（SECRET_KEY）を自動ローテーションするLambda
+├── lambda/              … 上記2つのLambdaのソースコード
+├── bootstrap-nonprod/   … nonprodアカウントのOIDC・IAMロールの初期セットアップ
+├── bootstrap-prod/      … prodアカウントのOIDC・IAMロールの初期セットアップ
 ├── .github/workflows/
-│   ├── infra-ci.yml    … account_group/env/component単位でのplan/apply（OIDC認証）
-│   ├── cost-stop.yml   … ECSサービスを0スケール後、ALB・Interface型VPC Endpointをterraform destroy＋RDS停止（手動実行）
-│   └── cost-start.yml  … cost-stopの逆操作（terraform applyで再作成、手動実行）
-└── docs/architecture/  … 構成図
+│   ├── infra-ci.yml        … account_group/env/component単位でのplan/apply（OIDC認証）
+│   ├── cost-stop.yml       … ECSサービスを0スケール後、ALB・Interface型VPC Endpointをterraform destroy＋RDS停止（手動実行）
+│   ├── cost-start.yml      … cost-stopの逆操作（terraform applyで再作成、手動実行）
+│   └── security-stack.yml  … WAF・AWS Config・Security Hubをまとめて有効化／無効化（production、承認付き）
+└── docs/
+    ├── architecture/              … 構成図
+    └── security-stack-runbook.md  … セキュリティスタックのON/OFF手順
 ```
 
 ---
@@ -51,7 +60,7 @@ CloudFront（WAF Web ACL）
                RDS MySQL 8.4
 ```
 
-Private Subnet は NAT Gateway を使わず、VPC Endpoint（Interface × 4 + Gateway × 1）経由で ECR・Secrets Manager・CloudWatch Logs・S3 にプライベート到達しています。
+Private Subnet は NAT Gateway を使わず、VPC Endpoint（Interface × 5 + Gateway × 1）経由で ECR・Secrets Manager・CloudWatch Logs・S3 にプライベート到達しています。
 
 ---
 
@@ -94,13 +103,14 @@ GitHub Actions + OIDC 認証（アクセスキー不使用）。`account_group`/
 - GitHub Actions から AWS への認証は **OIDC**（アクセスキー不使用）。production は GitHub Environment 経由の信頼条件 + Required reviewers の承認ゲートで二重に保護
 - ALB は CloudFront 経由以外のリクエストを **X-Origin-Verify ヘッダー検証**で 403 拒否（直アクセス不可）
 - DB認証情報・Flask SECRET_KEY は **Secrets Manager** で管理
-- GuardDuty（脅威検出）・CloudTrail（証跡）は常時有効。AWS Config・Security Hub は検証期間のみ有効化するコスト最適化運用
-- WAF（CloudFront用・ALB用の2 Web ACL、AWS Managed Rule Groups）はコスト最適化のため使用時のみ作成する運用を予定
+- GuardDuty（脅威検出）・CloudTrail（証跡）は常時有効
+- WAF（CloudFront用・ALB用の2 Web ACL、AWS Managed Rule Groups）・AWS Config・Security Hub は、1つのフラグ（`enable_security_stack`）でまとめて有効化／無効化する。コストを抑えるため、現在は必要な期間だけ有効化している（`security-stack.yml`）
+- Flask のセッション署名鍵は Secrets Manager で90日ごとに自動ローテーション（1つ前の鍵も受け付け、ローテーションでログインが切れない）
 - S3 はパブリックアクセスを完全ブロックし、**OAC** 経由の CloudFront のみ許可
 
 ### 可用性・耐障害性
 staging 環境での実測値：
-- ECS デプロイサーキットブレーカーによる自動ロールバック（MTTR 約1分50秒）
+- ECS デプロイサーキットブレーカーによる自動ロールバック（失敗検知からロールバック完了まで約1分50秒）
 - Application Auto Scaling（CPU使用率ベース、負荷試験で確認）
 - タスク強制停止からの自動復旧（1分未満）
 - RDS ポイントインタイムリストア訓練（RTO 約14分）
@@ -117,7 +127,7 @@ NAT Gateway は使用せず、VPC Endpoint（Interface: ECR API/DKR・Secrets Ma
 | 停止時（cost-stop、通常時） | ~$1.55 / 月 | ~$1.8 / 月（リリース前） |
 | 稼働時（作業・負荷試験） | ~$55 / 月相当（時間課金） | ~$115 / 月（常時稼働後） |
 
-production 常時稼働後の内訳は ALB・ECS Fargate（0.5vCPU/1GB×2タスク）・VPC Endpoint・RDS（現状 Single-AZ、Multi-AZ は検討中）など。WAF・Security Hub/Config は常時稼働させず、検証時のみ作成・有効化する運用です。
+production 常時稼働後の内訳は ALB・ECS Fargate（0.5vCPU/1GB×2タスク）・VPC Endpoint・RDS（Single-AZ。Multi-AZ はコストとの比較で見送り）など。WAF・Security Hub/Config は常時稼働させず、検証時のみ作成・有効化する運用です。
 
 ---
 
@@ -128,3 +138,4 @@ production 常時稼働後の内訳は ALB・ECS Fargate（0.5vCPU/1GB×2タス�
 | [Tomario-portfolio](https://github.com/Tomario-portfolio/Tomario-portfolio) | ポートフォリオ全体の入り口・各リポジトリへのリンク |
 | [tomario-app](https://github.com/Tomario-portfolio/tomario-app) | Flask API + 静的フロントエンド |
 | [tomario-docs](https://github.com/Tomario-portfolio/tomario-docs) | 要件定義書・基本設計書・環境定義書 |
+| [tomario-steering](https://github.com/Tomario-portfolio/tomario-steering) | ADR・非機能試験・運用手順・リリース管理 |
