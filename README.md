@@ -1,7 +1,7 @@
 # tomario-infra
 
 ホテル予約システム「Tomario」の AWS インフラを管理する Terraform リポジトリです。
-dev（開発）・staging（負荷試験・障害試験）・production（本番）の3環境を、nonprod（dev/staging）とprod（production）の2つのAWSアカウントに分離し、staging で検証した構成をそのまま production に適用しています。
+dev（開発）・staging（負荷試験・障害試験）・production（本番）の3環境を、nonprod（dev/staging）とprod（production）の2つのAWSアカウントに分離しています。アプリの共通基盤（ネットワーク・ECS・RDS・CI/CD）は staging で検証した構成を production に適用し、production 固有の構成（WAF・AWS Config・Security Hub）は production で別途検証しています。
 
 > **はじめに読む場合** — 本番構成は [`envs/prod/production/`](envs/prod/production/)、主要な実装は [`modules/backend/`](modules/backend/)（ECS Fargate + ALB）と [`modules/network/`](modules/network/)（VPC Endpoint）を参照してください。
 
@@ -113,7 +113,7 @@ staging 環境での実測値：
 - ECS デプロイサーキットブレーカーによる自動ロールバック（失敗検知からロールバック完了まで約1分50秒）
 - Application Auto Scaling（CPU使用率ベース、負荷試験で確認）
 - タスク強制停止からの自動復旧（1分未満）
-- RDS ポイントインタイムリストア訓練（RTO 約14分）
+- RDS ポイントインタイムリストア訓練（復元を開始してから新しいDBインスタンスが利用可能になるまで約14分。接続先の切り替えやアプリの復旧までは含まない）
 
 ### ネットワーク
 NAT Gateway は使用せず、VPC Endpoint（Interface: ECR API/DKR・Secrets Manager・CloudWatch Logs・SSM Messages、Gateway: S3）でプライベート通信のみで完結させ、コストと外部露出を最小化しています。
